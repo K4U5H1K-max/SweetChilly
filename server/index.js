@@ -2,8 +2,14 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import multer from 'multer';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const distPath = path.resolve(__dirname, '../dist');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -960,8 +966,37 @@ app.get('/api/weather', (req, res) => {
   });
 });
 
-// Start Server
-app.listen(PORT, () => {
-  console.log(`[NER Backend] Service online and listening on port ${PORT}`);
-  console.log(`[NER Backend] Health check: http://localhost:${PORT}/api/health`);
+// ==========================================
+// Production Static Frontend & SPA Fallback
+// ==========================================
+app.use(express.static(distPath));
+
+app.use((req, res) => {
+  // Never intercept unhandled API routes
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ success: false, message: `API endpoint '${req.path}' not found.` });
+  }
+
+  res.sendFile(path.join(distPath, 'index.html'), (err) => {
+    if (err) {
+      res.status(200).send(`
+        <!DOCTYPE html>
+        <html>
+          <head><title>NER Logistics Intelligence</title></head>
+          <body style="font-family: sans-serif; padding: 40px; background: #0f172a; color: #f8fafc;">
+            <h2>NER Smart Logistics Intelligence Backend Online</h2>
+            <p>API service is operational. Health check: <a href="/api/health" style="color: #38bdf8;">/api/health</a></p>
+            <p>To serve the full frontend, run <code>npm run build</code> first.</p>
+          </body>
+        </html>
+      `);
+    }
+  });
+});
+
+// Start Server bound to 0.0.0.0 for Render / cloud environments
+const HOST = '0.0.0.0';
+app.listen(PORT, HOST, () => {
+  console.log(`[NER Backend] Service online and listening on http://${HOST}:${PORT}`);
+  console.log(`[NER Backend] Health check: http://${HOST}:${PORT}/api/health`);
 });
