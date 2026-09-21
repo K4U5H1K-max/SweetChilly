@@ -1,0 +1,45 @@
+from enum import Enum
+
+class TransportMode(str, Enum):
+    ROAD = "ROAD"
+    RAIL = "RAIL"
+    AIR = "AIR"
+    MARITIME = "MARITIME"
+    PUBLIC_TRANSIT = "PUBLIC_TRANSIT"
+    FREIGHT = "FREIGHT"
+    UNKNOWN = "UNKNOWN"
+
+class EventStatus(str, Enum):
+    DETECTED = "DETECTED"
+    ACTIVE = "ACTIVE"
+    ONGOING = "ONGOING"
+    RESOLVED = "RESOLVED"
+    EXPIRED = "EXPIRED"
+    PLANNED = "PLANNED"
+    CANCELLED = "CANCELLED"
+
+class EventSeverity(str, Enum):
+    CRITICAL = "CRITICAL"
+    HIGH = "HIGH"
+    MEDIUM = "MEDIUM"
+    LOW = "LOW"
+    UNKNOWN = "UNKNOWN"
+
+class SourceReliability(str, Enum):
+    OFFICIAL_GOVERNMENT = "OFFICIAL_GOVERNMENT"
+    OFFICIAL_TRANSPORT_OPERATOR = "OFFICIAL_TRANSPORT_OPERATOR"
+    OFFICIAL_WEATHER = "OFFICIAL_WEATHER"
+    ESTABLISHED_NEWS = "ESTABLISHED_NEWS"
+    AGGREGATOR = "AGGREGATOR"
+    OTHER = "OTHER"
+
+class SourceHealthStatus(str, Enum):
+    HEALTHY = "HEALTHY"
+    DEGRADED = "DEGRADED"
+    FAILED = "FAILED"
+    UNKNOWN = "UNKNOWN"
+
+class RunStatus(str, Enum):
+    RUNNING = "RUNNING"
+    SUCCESS = "SUCCESS"
+    FAILED = "FAILED"

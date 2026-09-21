@@ -1,0 +1,40 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environments
+venv/
+env/
+ENV/
+.venv/
+
+# Environment variables
+.env
+.env.local
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+logs/
+*.log
+
+# Databases
+*.sqlite3
+*.db
+
+# Alembic
+alembic.ini
+
+# pytest
+.pytest_cache/
+htmlcov/
+.coverage
+
+# mypy / ruff
+.mypy_cache/
+.ruff_cache/
