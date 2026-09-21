@@ -160,6 +160,73 @@ export const api = {
   async getWeather() {
     return request('/api/weather');
   },
+
+  // ==========================================
+  // Track 4: Driver Safety & Voice AI Client
+  // ==========================================
+
+  /**
+   * Flag or unflag a vehicle for safety check
+   * @param {{ vehicleId: string, reason: string, flagged?: boolean }} data
+   */
+  async flagVehicle(data) {
+    return request('/api/voice/flag-vehicle', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Trigger a voice safety check session
+   * @param {{ vehicleId: string, triggerSource?: string, flagReason?: string, simulatedOutcome?: string, customResponse?: string }} data
+   */
+  async triggerSafetyCall(data) {
+    return request('/api/voice/calls/trigger', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * List all safety call sessions (optionally filtered by vehicleId)
+   * @param {string} [vehicleId]
+   */
+  async getSafetyCalls(vehicleId) {
+    const query = vehicleId ? `?vehicleId=${encodeURIComponent(vehicleId)}` : '';
+    return request(`/api/voice/calls${query}`);
+  },
+
+  /**
+   * Get single safety call session by callId
+   * @param {string} callId
+   */
+  async getSafetyCall(callId) {
+    return request(`/api/voice/calls/${encodeURIComponent(callId)}`);
+  },
+
+  /**
+   * Resolve an operator escalation for a call session
+   * @param {string} callId
+   * @param {string} [notes]
+   */
+  async resolveSafetyCall(callId, notes) {
+    return request(`/api/voice/calls/${encodeURIComponent(callId)}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({ notes }),
+    });
+  },
+
+  /**
+   * Dev simulation helper for quick outcome verification
+   * @param {{ vehicleId: string, simulatedOutcome?: string, flagReason?: string }} data
+   */
+  async simulateSafetyCall(data) {
+    return request('/api/voice/simulate-call', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
 };
 
 export default api;
+

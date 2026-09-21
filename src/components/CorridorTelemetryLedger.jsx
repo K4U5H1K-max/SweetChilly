@@ -6,6 +6,7 @@ export default function CorridorTelemetryLedger({
   selectedVehicleId,
   onOpenAddVehicle,
   onEditVehicle,
+  onOpenSafetyModal,
 }) {
   const { corridors, vehicles, weather } = useApp();
   const [activeTab, setActiveTab] = useState('fleet');
@@ -21,6 +22,7 @@ export default function CorridorTelemetryLedger({
         (statusFilter === 'IN_TRANSIT' && s === 'IN_TRANSIT') ||
         (statusFilter === 'DELAYED' && s === 'DELAYED') ||
         (statusFilter === 'EMERGENCY' && (s === 'EMERGENCY' || v.priority === 'EMERGENCY_CRITICAL')) ||
+        (statusFilter === 'FLAGGED' && (v.isFlagged || (v.safetyStatus && v.safetyStatus !== 'NOT_CHECKED' && v.safetyStatus !== 'SAFE'))) ||
         (statusFilter === 'AT_DESTINATION' && s === 'AT_DESTINATION');
 
       const q = searchQuery.toLowerCase().trim();
@@ -31,11 +33,38 @@ export default function CorridorTelemetryLedger({
         v.cargo.toLowerCase().includes(q) ||
         v.origin.toLowerCase().includes(q) ||
         v.destination.toLowerCase().includes(q) ||
+        (v.driverName && v.driverName.toLowerCase().includes(q)) ||
+        (v.safetyStatus && v.safetyStatus.toLowerCase().includes(q)) ||
         (v.regNumber && v.regNumber.toLowerCase().includes(q));
 
       return matchesStatus && matchesSearch;
     });
   }, [vehicles, statusFilter, searchQuery]);
+
+  function getSafetyBadge(status, isFlagged) {
+    if (isFlagged && (!status || status === 'NOT_CHECKED' || status === 'PENDING_CALL')) {
+      return 'bg-amber-100 text-amber-900 border-amber-300 font-bold animate-pulse';
+    }
+    switch (status) {
+      case 'SAFE':
+        return 'bg-emerald-50 text-emerald-700 border-emerald-200 font-bold';
+      case 'DELAYED':
+        return 'bg-amber-50 text-amber-800 border-amber-200 font-semibold';
+      case 'BREAKDOWN':
+        return 'bg-rose-100 text-rose-800 border-rose-300 font-bold';
+      case 'ROAD_BLOCKED':
+        return 'bg-orange-100 text-orange-900 border-orange-300 font-bold';
+      case 'ASSISTANCE_REQUIRED':
+        return 'bg-red-100 text-red-900 border-red-400 font-bold animate-pulse';
+      case 'NO_RESPONSE':
+        return 'bg-slate-200 text-slate-800 border-slate-400 font-semibold';
+      case 'PENDING_CALL':
+        return 'bg-blue-100 text-blue-800 border-blue-300 font-bold';
+      case 'NOT_CHECKED':
+      default:
+        return 'bg-slate-100 text-slate-500 border-slate-200';
+    }
+  }
 
   return (
     <div className="w-full bg-white rounded-xl border border-slate-200/90 shadow-xs flex flex-col overflow-hidden font-sans" id="corridors">
@@ -104,6 +133,7 @@ export default function CorridorTelemetryLedger({
                 { id: 'IN_TRANSIT', label: 'In Transit' },
                 { id: 'DELAYED', label: 'Delayed' },
                 { id: 'EMERGENCY', label: 'Emergency' },
+                { id: 'FLAGGED', label: `Safety Flagged (${vehicles.filter(v => v.isFlagged || (v.safetyStatus && v.safetyStatus !== 'NOT_CHECKED' && v.safetyStatus !== 'SAFE')).length})` },
                 { id: 'AT_DESTINATION', label: 'At Destination' },
               ].map((f) => (
                 <button
@@ -124,7 +154,7 @@ export default function CorridorTelemetryLedger({
             <div className="flex items-center gap-2">
               <input
                 type="text"
-                placeholder="Search vehicle, cargo, route..."
+                placeholder="Search vehicle, cargo, driver, safety..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="px-3 py-1 rounded-md bg-white border border-slate-300 text-xs text-slate-800 focus:outline-hidden focus:border-slate-500 shadow-2xs"
@@ -146,7 +176,8 @@ export default function CorridorTelemetryLedger({
                   <th className="py-2.5 px-4">Type & capacity</th>
                   <th className="py-2.5 px-4">Assigned cargo</th>
                   <th className="py-2.5 px-4">Route trajectory</th>
-                  <th className="py-2.5 px-4">Status</th>
+                  <th className="py-2.5 px-4">Movement</th>
+                  <th className="py-2.5 px-4">Safety Status</th>
                   <th className="py-2.5 px-4">Telemetry</th>
                   <th className="py-2.5 px-4 text-center">Actions</th>
                 </tr>
@@ -154,7 +185,7 @@ export default function CorridorTelemetryLedger({
               <tbody className="divide-y divide-slate-100">
                 {filteredVehicles.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="p-8 text-center text-slate-400 font-medium">
+                    <td colSpan={9} className="p-8 text-center text-slate-400 font-medium">
                       No vehicles match current filter criteria.
                     </td>
                   </tr>
@@ -176,11 +207,18 @@ export default function CorridorTelemetryLedger({
                       <tr
                         key={v.id}
                         className={`transition-colors ${
-                          isSelected ? 'bg-blue-50/60' : 'hover:bg-slate-50/80'
+                          v.isFlagged
+                            ? 'bg-amber-50/40 border-l-4 border-l-amber-500'
+                            : isSelected
+                            ? 'bg-blue-50/60'
+                            : 'hover:bg-slate-50/80'
                         }`}
                       >
                         <td className="py-3 px-4 font-mono font-bold text-slate-900">
-                          {v.id}
+                          <div className="flex items-center gap-1.5">
+                            {v.isFlagged && <span title={`Flagged: ${v.flagReason || 'Safety Check'}`} className="text-amber-600 text-xs">🚩</span>}
+                            <span>{v.id}</span>
+                          </div>
                         </td>
                         <td className="py-3 px-4">
                           <div className="font-bold text-slate-900">{v.name}</div>
@@ -202,6 +240,18 @@ export default function CorridorTelemetryLedger({
                             {statusNormalized.replace('_', ' ')}
                           </span>
                         </td>
+                        <td className="py-3 px-4">
+                          <div className="flex flex-col gap-0.5">
+                            <span className={`px-2 py-0.5 rounded-md text-[10px] uppercase border whitespace-nowrap ${getSafetyBadge(v.safetyStatus, v.isFlagged)}`}>
+                              {(v.safetyStatus || 'NOT_CHECKED').replace('_', ' ')}
+                            </span>
+                            {v.isFlagged && v.flagReason && (
+                              <span className="text-[10px] text-amber-800 font-medium truncate max-w-[130px]" title={v.flagReason}>
+                                {v.flagReason}
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="py-3 px-4 font-mono">
                           <div className="text-slate-800 font-semibold">{v.speedKmH || 0} km/h</div>
                           {v.delayEstMinutes > 0 && (
@@ -213,14 +263,26 @@ export default function CorridorTelemetryLedger({
                             <button
                               onClick={() => onSelectVehicle && onSelectVehicle(v.id)}
                               title="Focus & Track on GIS Map"
-                              className="px-2.5 py-1 rounded-md bg-slate-900 hover:bg-blue-700 text-white font-semibold text-xs transition-colors shadow-2xs"
+                              className="px-2 py-1 rounded-md bg-slate-900 hover:bg-blue-700 text-white font-semibold text-xs transition-colors shadow-2xs"
                             >
                               Track
                             </button>
                             <button
+                              onClick={() => onOpenSafetyModal && onOpenSafetyModal(v.id)}
+                              title="AI Voice Safety Check (Track 4)"
+                              className={`px-2 py-1 rounded-md font-semibold text-xs transition-all shadow-2xs flex items-center gap-1 ${
+                                v.isFlagged
+                                  ? 'bg-amber-600 hover:bg-amber-700 text-white font-bold animate-pulse'
+                                  : 'bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white border border-blue-200'
+                              }`}
+                            >
+                              <span>📞</span>
+                              <span>Safety Check</span>
+                            </button>
+                            <button
                               onClick={() => onEditVehicle && onEditVehicle(v.id)}
                               title="Update Status / Telemetry"
-                              className="px-2.5 py-1 rounded-md bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-semibold text-xs transition-colors shadow-2xs"
+                              className="px-2 py-1 rounded-md bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-semibold text-xs transition-colors shadow-2xs"
                             >
                               Update
                             </button>

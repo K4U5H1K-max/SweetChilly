@@ -8,6 +8,7 @@ import CorridorTelemetryLedger from './components/CorridorTelemetryLedger';
 import IncidentReportingModal from './components/IncidentReportingModal';
 import VehicleManager from './components/VehicleManager';
 import RoutePlannerModal from './components/RoutePlannerModal';
+import DriverSafetyModal from './components/DriverSafetyModal';
 import ProjectBrahmaputraLanding from './components/ProjectBrahmaputra/ProjectBrahmaputraLanding';
 import { useApp } from './context/AppContext';
 
@@ -19,10 +20,17 @@ export default function App() {
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isVehicleModalOpen, setIsVehicleModalOpen] = useState(false);
   const [isRoutePlannerOpen, setIsRoutePlannerOpen] = useState(false);
+  const [isSafetyModalOpen, setIsSafetyModalOpen] = useState(false);
+  const [safetyVehicleId, setSafetyVehicleId] = useState(null);
   const [routePlannerOrigin, setRoutePlannerOrigin] = useState('Guwahati');
   const [routePlannerDestination, setRoutePlannerDestination] = useState('Silchar');
   const [editingVehicleId, setEditingVehicleId] = useState(null);
   const [toastNotification, setToastNotification] = useState(null);
+
+  const handleOpenSafetyModal = (vehId) => {
+    setSafetyVehicleId(vehId);
+    setIsSafetyModalOpen(true);
+  };
 
   const handleIncidentCreated = (newIncidentId) => {
     setSelectedIncidentId(newIncidentId);
@@ -215,6 +223,7 @@ export default function App() {
                   selectedVehicleId={selectedVehicleId}
                   onSelectVehicle={setSelectedVehicleId}
                   onEditVehicle={handleEditVehicle}
+                  onOpenSafetyModal={handleOpenSafetyModal}
                 />
               </div>
               <div className="lg:col-span-4 flex flex-col" id="disruptions">
@@ -261,6 +270,7 @@ export default function App() {
               }}
               onOpenAddVehicle={() => setIsVehicleModalOpen(true)}
               onEditVehicle={handleEditVehicle}
+              onOpenSafetyModal={handleOpenSafetyModal}
             />
           </div>
         </section>
@@ -292,6 +302,13 @@ export default function App() {
         isOpen={isReportModalOpen}
         onClose={() => setIsReportModalOpen(false)}
         onIncidentCreated={handleIncidentCreated}
+      />
+
+      {/* Track 4: Driver Safety AI Voice Modal */}
+      <DriverSafetyModal
+        isOpen={isSafetyModalOpen}
+        vehicleId={safetyVehicleId}
+        onClose={() => setIsSafetyModalOpen(false)}
       />
     </div>
   </>

@@ -8,6 +8,7 @@ export default function MapplsGISMap({
   selectedVehicleId,
   onSelectVehicle,
   onEditVehicle,
+  onOpenSafetyModal,
 }) {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -316,9 +317,11 @@ export default function MapplsGISMap({
       const statusNormalized = String(veh.status || 'IN_TRANSIT').toUpperCase().replace(/\s+/g, '_');
       const isEmergency = veh.priority === 'EMERGENCY_CRITICAL' || statusNormalized === 'EMERGENCY';
       const isDelayed = statusNormalized === 'DELAYED';
+      const isSafetyAlert = veh.isFlagged || veh.safetyStatus === 'BREAKDOWN' || veh.safetyStatus === 'ASSISTANCE_REQUIRED' || veh.safetyStatus === 'ROAD_BLOCKED';
 
       let markerBg = 'bg-slate-900';
-      if (isEmergency) markerBg = 'bg-rose-600';
+      if (isEmergency || veh.safetyStatus === 'ASSISTANCE_REQUIRED') markerBg = 'bg-rose-600';
+      else if (isSafetyAlert) markerBg = 'bg-amber-600';
       else if (isDelayed) markerBg = 'bg-amber-600';
 
       const vehicleIcon = L.divIcon({
@@ -327,6 +330,11 @@ export default function MapplsGISMap({
           <div class="relative flex items-center justify-center cursor-pointer transition-transform ${
             isSelected ? 'scale-125 z-50' : 'hover:scale-110'
           }">
+            ${
+              isSafetyAlert
+                ? '<div class="absolute w-8 h-8 rounded-lg bg-amber-500/40 animate-ping"></div>'
+                : ''
+            }
             <div class="w-7 h-7 rounded-lg ${markerBg} text-white flex items-center justify-center shadow-lg border-2 border-white">
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -346,25 +354,50 @@ export default function MapplsGISMap({
 
       const marker = L.marker([veh.currentPos.lat, veh.currentPos.lng], { icon: vehicleIcon });
 
+      const safetyStatusText = (veh.safetyStatus || 'NOT_CHECKED').replace('_', ' ');
+      let safetyBadgeClass = 'bg-slate-100 text-slate-700';
+      if (veh.safetyStatus === 'SAFE') safetyBadgeClass = 'bg-emerald-100 text-emerald-800';
+      else if (veh.safetyStatus === 'BREAKDOWN') safetyBadgeClass = 'bg-rose-100 text-rose-800 font-bold';
+      else if (veh.safetyStatus === 'ASSISTANCE_REQUIRED') safetyBadgeClass = 'bg-red-100 text-red-900 font-bold animate-pulse';
+      else if (veh.isFlagged) safetyBadgeClass = 'bg-amber-100 text-amber-800 font-bold';
+
       const popupHtml = `
-        <div class="p-3.5 bg-white min-w-[260px] font-sans">
+        <div class="p-3.5 bg-white min-w-[270px] font-sans">
           <div class="flex items-center justify-between border-b border-slate-100 pb-2 mb-2">
             <span class="font-mono text-[10px] font-bold text-slate-500">${veh.id}</span>
-            <span class="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
-              isEmergency
-                ? 'bg-rose-100 text-rose-800'
-                : isDelayed
-                ? 'bg-amber-100 text-amber-800'
-                : 'bg-blue-100 text-blue-800'
-            }">
-              ${statusNormalized.replace('_', ' ')}
-            </span>
+            <div class="flex items-center gap-1">
+              <span class="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                isEmergency
+                  ? 'bg-rose-100 text-rose-800'
+                  : isDelayed
+                  ? 'bg-amber-100 text-amber-800'
+                  : 'bg-blue-100 text-blue-800'
+              }">
+                ${statusNormalized.replace('_', ' ')}
+              </span>
+            </div>
           </div>
           <div class="font-bold text-slate-900 text-sm mb-0.5">${veh.name}</div>
           <div class="text-xs text-slate-600 mb-2">
             <span class="font-medium">${veh.origin}</span> → <span class="font-medium">${veh.destination}</span>
           </div>
+
           <div class="bg-slate-50 p-2 rounded-md border border-slate-100 text-xs space-y-1 mb-2">
+            <div class="flex justify-between">
+              <span class="text-slate-500">Driver:</span>
+              <span class="font-semibold text-slate-800">${veh.driverName || 'Operator'}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-500">Safety State:</span>
+              <span class="px-1.5 py-0.2 rounded text-[10px] font-bold ${safetyBadgeClass}">${safetyStatusText}</span>
+            </div>
+            ${
+              veh.isFlagged && veh.flagReason
+                ? `<div class="p-1 bg-amber-50 border border-amber-200 text-amber-900 text-[11px] rounded">
+                    🚩 <span class="font-semibold">${veh.flagReason}</span>
+                  </div>`
+                : ''
+            }
             <div class="flex justify-between">
               <span class="text-slate-500">Payload:</span>
               <span class="font-semibold text-slate-800">${veh.cargo} (${veh.capacity || '5T'})</span>
@@ -382,17 +415,26 @@ export default function MapplsGISMap({
                 : ''
             }
           </div>
-          <div class="pt-2 border-t border-slate-100 flex items-center justify-between">
-            <span class="text-[11px] font-mono text-slate-400">
-              ${veh.currentPos.lat.toFixed(4)}°N, ${veh.currentPos.lng.toFixed(4)}°E
+          <div class="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+            <span class="text-[10px] font-mono text-slate-400">
+              ${veh.currentPos.lat.toFixed(3)}°N, ${veh.currentPos.lng.toFixed(3)}°E
             </span>
-            ${
-              onEditVehicle
-                ? `<button id="edit-veh-btn-${veh.id}" class="px-2.5 py-1 rounded bg-slate-900 text-white hover:bg-blue-700 text-xs font-semibold transition-colors">
-                    Update
-                  </button>`
-                : ''
-            }
+            <div class="flex items-center gap-1.5">
+              ${
+                onOpenSafetyModal
+                  ? `<button id="safety-veh-btn-${veh.id}" class="px-2 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition-colors flex items-center gap-1">
+                      📞 Safety
+                    </button>`
+                  : ''
+              }
+              ${
+                onEditVehicle
+                  ? `<button id="edit-veh-btn-${veh.id}" class="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-semibold transition-colors">
+                      Update
+                    </button>`
+                  : ''
+              }
+            </div>
           </div>
         </div>
       `;
@@ -400,9 +442,13 @@ export default function MapplsGISMap({
       marker.bindPopup(popupHtml, { className: 'govtech-popup' });
 
       marker.on('popupopen', () => {
-        const btn = document.getElementById(`edit-veh-btn-${veh.id}`);
-        if (btn && onEditVehicle) {
-          btn.onclick = () => onEditVehicle(veh.id);
+        const editBtn = document.getElementById(`edit-veh-btn-${veh.id}`);
+        if (editBtn && onEditVehicle) {
+          editBtn.onclick = () => onEditVehicle(veh.id);
+        }
+        const safetyBtn = document.getElementById(`safety-veh-btn-${veh.id}`);
+        if (safetyBtn && onOpenSafetyModal) {
+          safetyBtn.onclick = () => onOpenSafetyModal(veh.id);
         }
       });
 
@@ -415,7 +461,7 @@ export default function MapplsGISMap({
       vehiclesLayerRef.current.addLayer(marker);
       vehicleMarkersMapRef.current.set(veh.id, marker);
     });
-  }, [vehicles, layers.vehicles, selectedVehicleId, onSelectVehicle, onEditVehicle]);
+  }, [vehicles, layers.vehicles, selectedVehicleId, onSelectVehicle, onEditVehicle, onOpenSafetyModal]);
 
   // Update AI Projected Active Route
   useEffect(() => {

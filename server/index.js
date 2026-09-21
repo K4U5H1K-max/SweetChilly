@@ -4,6 +4,8 @@ import dotenv from 'dotenv';
 import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { voiceService } from './voice/voiceService.js';
+import { validateFlagRequest, validateTriggerRequest } from './voice/securityGuardrails.js';
 
 dotenv.config();
 
@@ -66,56 +68,86 @@ function getNearestHub(lat, lng) {
 let incidents = [
   {
     id: 'INC-NER-001',
-    title: 'Major Landslide at Sonapur Tunnel',
-    corridorId: 'COR-04',
-    corridorName: 'Shillong - Silchar (NH-6)',
+    title: 'Severe Landslide at Sonapur Tunnel (NH-6)',
+    location: 'East Jaintia Hills, Meghalaya',
+    corridorId: 'COR-001-NH6',
+    corridorName: 'NH-6 (Guwahati - Shillong - Silchar Corridor)',
     type: 'LANDSLIDE',
-    severity: 'HIGH',
+    severity: 'CRITICAL',
     status: 'VERIFIED',
-    aiConfidence: 0.94,
-    reportedBy: 'Officer D. Sangma (Field Post 4)',
+    aiConfidence: 0.98,
+    classification: 'High-Volume Mudslide & Boulder Obstruction',
+    damageAssessment: '150 meters roadway buried under 3.5m mud and rock debris. Concrete barrier breached.',
+    damage_assessment: '150 meters roadway buried under 3.5m mud and rock debris. Concrete barrier breached.',
+    operationalImpact: 'Total blockage of NH-6 artery connecting Barak Valley, Mizoram and Tripura.',
+    reasoning: 'Visible structural displacement, heavy mud accumulation across both carriageways, compromised hillside slope.',
+    evidence: 'Visible structural displacement, heavy mud accumulation across both carriageways, compromised hillside slope.',
+    recommendedAction: 'Immediate rerouting of all high-priority convoys via Haflong (NH-27 / NH-627). Dispatch NDRF clearing unit.',
+    recommended_action: 'Immediate rerouting of all high-priority convoys via Haflong (NH-27 / NH-627). Dispatch NDRF clearing unit.',
+    recommendedResponse: 'Immediate rerouting of all high-priority convoys via Haflong (NH-27 / NH-627). Dispatch NDRF clearing unit.',
+    reportedBy: 'Field Officer (NDRF Unit 03)',
     lat: 25.1147,
     lng: 92.3685,
-    reportedAt: new Date(Date.now() - 4 * 3600 * 1000).toISOString(),
-    description: 'Debris flow and boulder collapse completely obstructing both carriageways near east portal. Excavation underway.',
+    reportedAt: '2026-09-21T06:30:00Z',
+    description: 'Major hillside slope failure following 72h continuous monsoon downpour. Heavy mud and boulders blocking both lanes.',
     estimatedClearanceHours: 6.5,
-    alternateRoute: 'Via Haflong - Umrangso route (adds ~85 km)',
+    alternateRoute: 'Guwahati -> Nagaon (NH-27) -> Haflong Bypass (NH-627) -> Silchar',
     imageUrl: null,
   },
   {
     id: 'INC-NER-002',
-    title: 'Flash Flood & Siltation at Nagaon Bypass',
-    corridorId: 'COR-03',
-    corridorName: 'Guwahati - Dimapur (NH-27)',
+    title: 'Flash Flood Inundation at Raha (NH-27)',
+    location: 'Nagaon, Assam',
+    corridorId: 'COR-002-NH27',
+    corridorName: 'NH-27 (Guwahati - Nagaon - Dimapur East-West Corridor)',
     type: 'FLOOD',
-    severity: 'MEDIUM',
+    severity: 'HIGH',
     status: 'VERIFIED',
-    aiConfidence: 0.89,
-    reportedBy: 'Patrol Unit Alpha-7',
-    lat: 26.3456,
-    lng: 92.6841,
-    reportedAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
-    description: 'Brahmaputra tributary overflow causing 1.5 ft water overtopping on right lane. Single-lane slow transit allowed.',
+    aiConfidence: 0.94,
+    classification: 'River Waterlogging / Shallow Inundation',
+    damageAssessment: '45cm standing water over 800m highway stretch. Low-clearance LCVs stalled.',
+    damage_assessment: '45cm standing water over 800m highway stretch. Low-clearance LCVs stalled.',
+    operationalImpact: '30-45 min transit delay. Single-lane slow passage operational with police escort.',
+    reasoning: 'Kopili River embankment overflow detected on western shoulder.',
+    evidence: 'Kopili River embankment overflow detected on western shoulder.',
+    recommendedAction: 'Limit traffic to heavy freight trucks (>10T) and emergency relief ambulances.',
+    recommended_action: 'Limit traffic to heavy freight trucks (>10T) and emergency relief ambulances.',
+    recommendedResponse: 'Limit traffic to heavy freight trucks (>10T) and emergency relief ambulances.',
+    reportedBy: 'Assam Highway Patrol #12',
+    lat: 26.2234,
+    lng: 92.5218,
+    reportedAt: '2026-09-21T08:15:00Z',
+    description: 'Kopili River embankment overflow causing 45cm sheet flooding over carriageway.',
     estimatedClearanceHours: 3.0,
-    alternateRoute: 'Slow convoy escort in place',
+    alternateRoute: 'Nagaon Rural Bypass -> Doboka Junction',
     imageUrl: null,
   },
   {
     id: 'INC-NER-003',
-    title: 'Jiribam Bridge Scour & Load Restriction',
-    corridorId: 'COR-05',
-    corridorName: 'Silchar - Imphal (NH-37)',
-    type: 'INFRASTRUCTURE_FAILURE',
+    title: 'Structural Subsidence at Barak Bridge (NH-37)',
+    location: 'Jiribam Border, Manipur',
+    corridorId: 'COR-003-NH37',
+    corridorName: 'NH-37 (Silchar - Jiribam - Imphal Lifeline)',
+    type: 'BRIDGE_DAMAGE',
     severity: 'CRITICAL',
     status: 'VERIFIED',
     aiConfidence: 0.96,
-    reportedBy: 'Highway Engineer R. K. Singh',
-    lat: 24.8021,
-    lng: 93.1235,
-    reportedAt: new Date(Date.now() - 1 * 3600 * 1000).toISOString(),
-    description: 'Pillar scouring observed following continuous monsoon torrents. Vehicles over 5 Ton prohibited until structural reinforcement.',
+    classification: 'Bridge Pier Scour & Expansion Joint Shear',
+    damageAssessment: 'Pier 2 footing exposed by swollen river current. Transverse crack along deck slab.',
+    damage_assessment: 'Pier 2 footing exposed by swollen river current. Transverse crack along deck slab.',
+    operationalImpact: 'Vehicles >5 Tons prohibited. Essential medical cargo transshipment required.',
+    reasoning: 'High-speed flood velocity eroding abutment foundation.',
+    evidence: 'High-speed flood velocity eroding abutment foundation.',
+    recommendedAction: 'Engage BRO engineering team for Bailey bridge stabilization. Divert heavy trucks.',
+    recommended_action: 'Engage BRO engineering team for Bailey bridge stabilization. Divert heavy trucks.',
+    recommendedResponse: 'Engage BRO engineering team for Bailey bridge stabilization. Divert heavy trucks.',
+    reportedBy: 'Manipur PWD Field Engineer',
+    lat: 24.8012,
+    lng: 93.1234,
+    reportedAt: '2026-09-21T09:00:00Z',
+    description: 'Severe erosion around central pier footing following flash flood in Barak tributary.',
     estimatedClearanceHours: 12.0,
-    alternateRoute: 'Light vehicles only; heavy convoys held at Silchar depot',
+    alternateRoute: 'Restricted transshipment via light motor vehicles only',
     imageUrl: null,
   },
 ];
@@ -124,7 +156,7 @@ let alerts = [
   {
     id: 'ALT-NER-101',
     incidentId: 'INC-NER-001',
-    headline: 'NH-6 BLOCKED: Sonapur Tunnel Inactive',
+    headline: 'CRITICAL: NH-6 Sonapur Tunnel Blocked by Landslide',
     district: 'West Jaintia Hills / Cachar',
     level: 'CRITICAL',
     impact: 'Barak Valley, Tripura, Mizoram isolated from direct Shillong road lifeline.',
@@ -169,6 +201,13 @@ let vehicles = [
     assignedCorridor: 'NH-6',
     delayEstMinutes: 180,
     priority: 'EMERGENCY_CRITICAL',
+    driverName: 'B. Kalita',
+    driverPhone: '+91-98640-12345',
+    isFlagged: false,
+    flagReason: null,
+    safetyStatus: 'NOT_CHECKED',
+    lastSafetyCheck: null,
+    activeCallId: null,
   },
   {
     id: 'VEH-NER-204',
@@ -185,73 +224,172 @@ let vehicles = [
     assignedCorridor: 'GS Road / NH-27',
     delayEstMinutes: 0,
     priority: 'HIGH',
+    driverName: 'S. Marak',
+    driverPhone: '+91-94361-23456',
+    isFlagged: false,
+    flagReason: null,
+    safetyStatus: 'NOT_CHECKED',
+    lastSafetyCheck: null,
+    activeCallId: null,
   },
   {
     id: 'VEH-NER-309',
-    regNumber: 'MN-01-A-3319',
-    name: 'Manipur Relief Lifeline 09',
-    type: 'Medium Cargo Truck',
-    capacity: '7 Ton',
-    cargo: 'Baby Food, ORS & Hospital Supplies',
+    regNumber: 'TR-01-B-3319',
+    name: 'Tripura POL Tanker Convoy #09',
+    type: 'POL Petroleum Tanker (18KL)',
+    capacity: '18 KL',
+    cargo: 'High-Speed Diesel (HSD) & Petrol',
     status: 'IN_TRANSIT',
-    speedKmH: 32,
-    origin: 'Silchar',
-    destination: 'Imphal',
-    currentPos: { lat: 24.8100, lng: 92.9500 },
-    assignedCorridor: 'NH-37',
+    speedKmH: 38,
+    origin: 'Guwahati',
+    destination: 'Agartala',
+    currentPos: { lat: 24.9500, lng: 92.4000 },
+    assignedCorridor: 'NH-6 / NH-8',
     delayEstMinutes: 240,
-    priority: 'EMERGENCY_CRITICAL',
+    priority: 'HIGH',
+    driverName: 'R. Debbarma',
+    driverPhone: '+91-98620-34567',
+    isFlagged: false,
+    flagReason: null,
+    safetyStatus: 'NOT_CHECKED',
+    lastSafetyCheck: null,
+    activeCallId: null,
   },
   {
     id: 'VEH-NER-412',
-    regNumber: 'AR-02-B-6721',
-    name: 'Arunachal Hydro Grid Express 12',
-    type: 'Utility Technical Dispatch',
-    capacity: '4 Ton',
-    cargo: 'Substation Transformers & Repair Parts',
-    status: 'IN_TRANSIT',
-    speedKmH: 58,
-    origin: 'Guwahati',
-    destination: 'Itanagar',
-    currentPos: { lat: 26.6500, lng: 92.8000 },
-    assignedCorridor: 'NH-15',
-    delayEstMinutes: 30,
-    priority: 'MEDIUM',
+    regNumber: 'MN-01-AA-7821',
+    name: 'Manipur Valley Oxygen & Medical LCV',
+    type: 'Cryogenic Liquid Oxygen Tanker',
+    capacity: '4.0 Ton',
+    cargo: 'Liquid Medical Oxygen (LMO)',
+    status: 'REROUTED',
+    speedKmH: 42,
+    origin: 'Silchar',
+    destination: 'Imphal',
+    currentPos: { lat: 24.8100, lng: 92.9500 },
+    assignedCorridor: 'NH-37 (Via Jiribam Transshipment)',
+    delayEstMinutes: 90,
+    priority: 'EMERGENCY_CRITICAL',
+    driverName: 'N. Singh',
+    driverPhone: '+91-98561-45678',
+    isFlagged: false,
+    flagReason: null,
+    safetyStatus: 'NOT_CHECKED',
+    lastSafetyCheck: null,
+    activeCallId: null,
   },
   {
-    id: 'VEH-NER-505',
-    regNumber: 'TR-01-T-1144',
-    name: 'Tripura Fuel Logistics Tanker 05',
-    type: 'Bulk Fuel Tanker',
-    capacity: '15,000 Liters',
-    cargo: 'Diesel Fuel for Generator Stations',
-    status: 'STATIONARY',
+    id: 'VEH-NER-515',
+    regNumber: 'NL-07-C-5541',
+    name: 'Nagaland Disaster Relief Express',
+    type: 'Container Freight Truck',
+    capacity: '10 Ton',
+    cargo: 'Dry Rations, Tarpaulins & Water Purification Kits',
+    status: 'IN_TRANSIT',
+    speedKmH: 60,
+    origin: 'Guwahati',
+    destination: 'Kohima',
+    currentPos: { lat: 26.3100, lng: 93.4200 },
+    assignedCorridor: 'NH-27 / NH-29',
+    delayEstMinutes: 30,
+    priority: 'HIGH',
+    driverName: 'K. Angami',
+    driverPhone: '+91-94360-56789',
+    isFlagged: false,
+    flagReason: null,
+    safetyStatus: 'NOT_CHECKED',
+    lastSafetyCheck: null,
+    activeCallId: null,
+  },
+  {
+    id: 'VEH-NER-602',
+    regNumber: 'MZ-01-A-1120',
+    name: 'Mizoram High-Altitude LCV Convoy',
+    type: 'Medium Duty Truck (4x4)',
+    capacity: '6 Ton',
+    cargo: 'Baby Food & Pharmaceutical Supplies',
+    status: 'IDLE_STAGING',
     speedKmH: 0,
     origin: 'Silchar',
-    destination: 'Agartala',
+    destination: 'Aizawl',
     currentPos: { lat: 24.8170, lng: 92.7960 },
-    assignedCorridor: 'NH-8',
+    assignedCorridor: 'NH-306 / NH-54',
     delayEstMinutes: 0,
     priority: 'HIGH',
+    driverName: 'L. Sailo',
+    driverPhone: '+91-98625-67890',
+    isFlagged: false,
+    flagReason: null,
+    safetyStatus: 'NOT_CHECKED',
+    lastSafetyCheck: null,
+    activeCallId: null,
+  },
+  {
+    id: 'VEH-NER-708',
+    regNumber: 'AR-01-D-8890',
+    name: 'Arunachal Strategic Border Supply #08',
+    type: 'Heavy 6x6 All-Terrain Hauler',
+    capacity: '15 Ton',
+    cargo: 'Heavy Engineering Spares & Bridge Panels',
+    status: 'IN_TRANSIT',
+    speedKmH: 35,
+    origin: 'Tezpur',
+    destination: 'Itanagar',
+    currentPos: { lat: 26.8500, lng: 93.2500 },
+    assignedCorridor: 'NH-15 / NH-415',
+    delayEstMinutes: 0,
+    priority: 'HIGH',
+    driverName: 'T. Riba',
+    driverPhone: '+91-94362-78901',
+    isFlagged: false,
+    flagReason: null,
+    safetyStatus: 'NOT_CHECKED',
+    lastSafetyCheck: null,
+    activeCallId: null,
+  },
+  {
+    id: 'VEH-NER-819',
+    regNumber: 'SK-01-J-2244',
+    name: 'Sikkim Hill Corridor Express',
+    type: 'Multi-Axle Mountain Truck',
+    capacity: '8 Ton',
+    cargo: 'Emergency Hospital Oxygen Cylinders',
+    status: 'IN_TRANSIT',
+    speedKmH: 40,
+    origin: 'Siliguri',
+    destination: 'Gangtok',
+    currentPos: { lat: 27.0500, lng: 88.4700 },
+    assignedCorridor: 'NH-10 (Sevoke-Rongpo Corridor)',
+    delayEstMinutes: 45,
+    priority: 'HIGH',
+    driverName: 'D. Bhutia',
+    driverPhone: '+91-97330-89012',
+    isFlagged: false,
+    flagReason: null,
+    safetyStatus: 'NOT_CHECKED',
+    lastSafetyCheck: null,
+    activeCallId: null,
   },
 ];
 
 const weather = [
-  { corridorId: 'COR-01', location: 'Guwahati-Shillong', rainfallMm: 12.4, visibilityM: 4200, condition: 'Light Rain & Fog', landslideRisk: 'LOW' },
-  { corridorId: 'COR-02', location: 'Guwahati-Itanagar', rainfallMm: 38.0, visibilityM: 2800, condition: 'Moderate Showers', landslideRisk: 'MODERATE' },
-  { corridorId: 'COR-03', location: 'Guwahati-Dimapur', rainfallMm: 24.5, visibilityM: 3500, condition: 'Intermittent Rain', landslideRisk: 'LOW' },
-  { corridorId: 'COR-04', location: 'Shillong-Silchar (Sonapur)', rainfallMm: 94.2, visibilityM: 800, condition: 'Heavy Downpour & Mist', landslideRisk: 'CRITICAL' },
-  { corridorId: 'COR-05', location: 'Silchar-Imphal (Jiribam)', rainfallMm: 78.6, visibilityM: 1200, condition: 'Continuous Monsoon Torrent', landslideRisk: 'HIGH' },
-  { corridorId: 'COR-06', location: 'Silchar-Aizawl', rainfallMm: 62.1, visibilityM: 1500, condition: 'Cloudburst & Slush', landslideRisk: 'HIGH' },
-  { corridorId: 'COR-07', location: 'Silchar-Agartala', rainfallMm: 18.2, visibilityM: 5000, condition: 'Overcast', landslideRisk: 'LOW' },
-  { corridorId: 'COR-08', location: 'Siliguri-Gangtok', rainfallMm: 55.4, visibilityM: 1800, condition: 'Valley Mist & Rain', landslideRisk: 'MODERATE' },
+  { district: 'East Jaintia Hills', state: 'Meghalaya', condition: 'Torrential Rain & Monsoon Downpour', rainfallMm: 165, alertLevel: 'RED', windKmH: 45 },
+  { district: 'Cachar', state: 'Assam', condition: 'Heavy Rain & Thunderstorms', rainfallMm: 98, alertLevel: 'AMBER', windKmH: 32 },
+  { district: 'Nagaon', state: 'Assam', condition: 'Moderate Continuous Rain', rainfallMm: 62, alertLevel: 'YELLOW', windKmH: 24 },
+  { district: 'Kamrup Metropolitan', state: 'Assam', condition: 'Overcast & Intermittent Showers', rainfallMm: 35, alertLevel: 'GREEN', windKmH: 18 },
+  { district: 'Kohima', state: 'Nagaland', condition: 'Dense Mountain Fog & Mist', rainfallMm: 45, alertLevel: 'YELLOW', windKmH: 15 },
+  { district: 'Jiribam', state: 'Manipur', condition: 'Flash Flood Watch & Heavy Rain', rainfallMm: 120, alertLevel: 'RED', windKmH: 38 },
+  { district: 'Aizawl', state: 'Mizoram', condition: 'Heavy Showers & Pavement Mud', rainfallMm: 85, alertLevel: 'AMBER', windKmH: 28 },
+  { district: 'Papum Pare', state: 'Arunachal Pradesh', condition: 'Scattered High-Altitude Showers', rainfallMm: 40, alertLevel: 'GREEN', windKmH: 20 },
 ];
 
 // Health Check Endpoint
 app.get('/api/health', (req, res) => {
   res.json({
-    status: 'ok',
-    service: 'NER Logistics Intelligence API',
+    status: 'OK',
+    system: 'Project Brahmaputra - Strategic NER Logistics Intelligence Engine',
+    timestamp: new Date().toISOString(),
+    nodeEnv: process.env.NODE_ENV || 'development',
     groqConfigured: !!process.env.GROQ_API_KEY,
   });
 });
@@ -500,48 +638,25 @@ Respond ONLY with a JSON object in this exact schema (no surrounding markdown te
   }
 });
 
-// Standard Manual Incident POST Endpoint (Fallback)
+// Manual Incident Creation Fallback
 app.post('/api/incidents', (req, res) => {
-  const { title, corridorId, corridorName, type, severity, reportedBy, lat, lng, description, imageUrl } = req.body;
-
-  if (!title || !lat || !lng) {
-    return res.status(400).json({
-      success: false,
-      message: 'Title, latitude, and longitude are required.',
-    });
-  }
-
-  const nextIncNum = incidents.reduce((max, inc) => {
-    const match = String(inc.id).match(/INC-NER-(\d+)/);
-    return match ? Math.max(max, parseInt(match[1], 10)) : max;
-  }, 0) + 1;
-
-  const newIncident = {
-    id: `INC-NER-${String(nextIncNum).padStart(3, '0')}`,
-    title,
-    corridorId: corridorId || 'COR-UNASSIGNED',
-    corridorName: corridorName || 'Regional Route',
-    type: type || 'ROAD_BLOCKAGE',
+  const { title, location, district, severity, lat, lng, type, description, affectedCorridor } = req.body;
+  const newInc = {
+    id: `INC-NER-${Date.now().toString(36).toUpperCase()}`,
+    title: title || 'Reported Hazard',
+    location: location || 'NER Corridor',
+    district: district || 'Unknown',
     severity: severity || 'MEDIUM',
-    status: 'VERIFIED',
-    aiConfidence: 0.90,
-    reportedBy: reportedBy || 'Field Officer',
-    lat: Number(lat),
-    lng: Number(lng),
-    reportedAt: new Date().toISOString(),
+    lat: parseFloat(lat) || 26.1445,
+    lng: parseFloat(lng) || 91.7362,
+    type: type || 'OBSTRUCTION',
     description: description || '',
-    estimatedClearanceHours: 4.0,
-    alternateRoute: null,
-    imageUrl: imageUrl || null,
+    affectedCorridor: affectedCorridor || 'General Transit Arterial',
+    verified: false,
+    reportedAt: new Date().toISOString(),
   };
-
-  incidents.unshift(newIncident);
-
-  res.status(201).json({
-    success: true,
-    message: 'Incident reported successfully',
-    data: newIncident,
-  });
+  incidents.unshift(newInc);
+  res.status(201).json({ success: true, data: newInc });
 });
 
 // Alerts Endpoint
@@ -553,7 +668,9 @@ app.get('/api/alerts', (req, res) => {
   });
 });
 
-// Vehicles Endpoints
+// ==========================================
+// Vehicle Fleet Management Endpoints
+// ==========================================
 app.get('/api/vehicles', (req, res) => {
   res.json({
     success: true,
@@ -563,319 +680,279 @@ app.get('/api/vehicles', (req, res) => {
 });
 
 app.post('/api/vehicles', (req, res) => {
-  const {
-    id,
-    vehicleId,
-    name,
-    regNumber,
-    type,
-    capacity,
-    cargo,
-    origin,
-    source,
-    destination,
-    status,
-    currentPos,
-    latitude,
-    longitude,
-    priority,
-    driverName,
-    driverPhone,
-    speedKmH,
-  } = req.body;
-
-  const resolvedId = id || vehicleId || `VEH-NER-${String(vehicles.length + 101).padStart(3, '0')}`;
-  const resolvedOrigin = origin || source;
-  const resolvedDestination = destination;
-  const resolvedType = type || 'Truck';
-
-  if (!resolvedOrigin || !resolvedDestination) {
-    return res.status(400).json({
-      success: false,
-      message: 'Source/Origin and Destination locations are required.',
-    });
-  }
-
-  // Duplicate Check
-  const existing = vehicles.find((v) => v.id.toLowerCase() === resolvedId.toLowerCase() || (regNumber && v.regNumber.toLowerCase() === regNumber.toLowerCase()));
-  if (existing) {
-    return res.status(409).json({
-      success: false,
-      message: `Vehicle with ID or Registration '${resolvedId}' already exists in active fleet registry.`,
-    });
-  }
-
-  // Position Resolution
-  let lat = 26.1445;
-  let lng = 91.7362;
-  if (currentPos && typeof currentPos.lat === 'number' && typeof currentPos.lng === 'number') {
-    lat = currentPos.lat;
-    lng = currentPos.lng;
-  } else if (latitude && longitude && !isNaN(Number(latitude)) && !isNaN(Number(longitude))) {
-    lat = Number(latitude);
-    lng = Number(longitude);
-  }
-
-  // Status Normalization
-  let normalizedStatus = 'IN_TRANSIT';
-  if (status) {
-    const s = String(status).toUpperCase().replace(/\s+/g, '_');
-    if (['IN_TRANSIT', 'DELAYED', 'AT_DESTINATION', 'EMERGENCY', 'IDLE', 'STATIONARY'].includes(s)) {
-      normalizedStatus = s;
-    }
-  }
-
-  const newVehicle = {
-    id: resolvedId,
-    name: name || `NER ${resolvedType} (${resolvedOrigin} → ${resolvedDestination})`,
-    regNumber: regNumber || `NER-${Math.floor(1000 + Math.random() * 9000)}`,
-    type: resolvedType,
-    capacity: capacity || '5 Ton',
-    cargo: cargo || 'Relief Supplies',
-    status: normalizedStatus,
-    speedKmH: typeof speedKmH === 'number' ? speedKmH : (normalizedStatus === 'IN_TRANSIT' ? 45 : 0),
-    origin: resolvedOrigin,
-    destination: resolvedDestination,
-    currentPos: { lat, lng },
-    assignedCorridor: `${resolvedOrigin} - ${resolvedDestination}`,
-    delayEstMinutes: normalizedStatus === 'DELAYED' ? 45 : 0,
-    priority: priority || (normalizedStatus === 'EMERGENCY' ? 'EMERGENCY_CRITICAL' : 'HIGH'),
-    driverName: driverName || 'Authorized Field Operator',
-    driverPhone: driverPhone || '+91-98640-XXXXX',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+  const v = req.body;
+  const newVeh = {
+    id: v.id || `VEH-NER-${Date.now().toString(36).toUpperCase()}`,
+    regNumber: v.regNumber || 'AS-01-XX-0000',
+    name: v.name || 'NER Freight Unit',
+    type: v.type || 'Standard Cargo Truck',
+    capacity: v.capacity || '5 Ton',
+    cargo: v.cargo || 'General Freight',
+    status: v.status || 'IN_TRANSIT',
+    speedKmH: Number(v.speedKmH) || 45,
+    origin: v.origin || 'Guwahati',
+    destination: v.destination || 'Silchar',
+    currentPos: v.currentPos || { lat: 26.1445, lng: 91.7362 },
+    assignedCorridor: v.assignedCorridor || 'NH-27',
+    delayEstMinutes: Number(v.delayEstMinutes) || 0,
+    priority: v.priority || 'MEDIUM',
+    driverName: v.driverName || 'Driver',
+    driverPhone: v.driverPhone || '+91-98765-43210',
+    isFlagged: Boolean(v.isFlagged),
+    flagReason: v.flagReason || null,
+    safetyStatus: v.safetyStatus || 'NOT_CHECKED',
+    lastSafetyCheck: v.lastSafetyCheck || null,
+    activeCallId: v.activeCallId || null,
   };
-
-  vehicles.unshift(newVehicle);
-
-  console.log(`[NER Fleet] Vehicle added: ${newVehicle.id} (${newVehicle.type}, ${newVehicle.status})`);
-
-  res.status(201).json({
-    success: true,
-    message: 'Vehicle registered successfully in logistics registry',
-    data: newVehicle,
-  });
+  vehicles.push(newVeh);
+  res.status(201).json({ success: true, data: newVeh });
 });
 
-// Update Vehicle Status, Coordinates, or Telemetry
 app.put('/api/vehicles/:id', (req, res) => {
   const { id } = req.params;
-  const vehicleIndex = vehicles.findIndex((v) => v.id.toLowerCase() === id.toLowerCase());
-
-  if (vehicleIndex === -1) {
-    return res.status(404).json({
-      success: false,
-      message: `Vehicle with ID '${id}' not found in active fleet registry.`,
-    });
+  const idx = vehicles.findIndex((v) => v.id === id);
+  if (idx === -1) {
+    return res.status(404).json({ success: false, message: `Vehicle ${id} not found.` });
   }
-
-  const currentVehicle = vehicles[vehicleIndex];
-  const {
-    status,
-    currentPos,
-    latitude,
-    longitude,
-    speedKmH,
-    delayEstMinutes,
-    cargo,
-    priority,
-    destination,
-    driverName,
-  } = req.body;
-
-  let updatedStatus = currentVehicle.status;
-  if (status) {
-    const s = String(status).toUpperCase().replace(/\s+/g, '_');
-    if (['IN_TRANSIT', 'DELAYED', 'AT_DESTINATION', 'EMERGENCY', 'IDLE', 'STATIONARY'].includes(s)) {
-      updatedStatus = s;
-    }
-  }
-
-  let updatedPos = { ...currentVehicle.currentPos };
-  if (currentPos && typeof currentPos.lat === 'number' && typeof currentPos.lng === 'number') {
-    updatedPos = { lat: currentPos.lat, lng: currentPos.lng };
-  } else if (latitude && longitude && !isNaN(Number(latitude)) && !isNaN(Number(longitude))) {
-    updatedPos = { lat: Number(latitude), lng: Number(longitude) };
-  }
-
-  const updatedVehicle = {
-    ...currentVehicle,
-    status: updatedStatus,
-    currentPos: updatedPos,
-    speedKmH: typeof speedKmH === 'number' ? speedKmH : (updatedStatus === 'IN_TRANSIT' ? currentVehicle.speedKmH || 48 : 0),
-    delayEstMinutes: typeof delayEstMinutes === 'number' ? delayEstMinutes : (updatedStatus === 'DELAYED' ? (currentVehicle.delayEstMinutes || 30) : 0),
-    cargo: cargo !== undefined ? cargo : currentVehicle.cargo,
-    priority: priority !== undefined ? priority : currentVehicle.priority,
-    destination: destination !== undefined ? destination : currentVehicle.destination,
-    driverName: driverName !== undefined ? driverName : currentVehicle.driverName,
-    updatedAt: new Date().toISOString(),
-  };
-
-  vehicles[vehicleIndex] = updatedVehicle;
-
-  console.log(`[NER Fleet] Vehicle updated: ${updatedVehicle.id} -> Status: ${updatedVehicle.status}, Pos: [${updatedPos.lat.toFixed(4)}, ${updatedPos.lng.toFixed(4)}]`);
-
-  res.json({
-    success: true,
-    message: 'Vehicle telemetry updated successfully',
-    data: updatedVehicle,
-  });
+  vehicles[idx] = { ...vehicles[idx], ...req.body };
+  res.json({ success: true, data: vehicles[idx] });
 });
 
 app.delete('/api/vehicles/:id', (req, res) => {
   const { id } = req.params;
-  const initialCount = vehicles.length;
-  vehicles = vehicles.filter((v) => v.id.toLowerCase() !== id.toLowerCase());
+  const idx = vehicles.findIndex((v) => v.id === id);
+  if (idx === -1) {
+    return res.status(404).json({ success: false, message: `Vehicle ${id} not found.` });
+  }
+  const deleted = vehicles.splice(idx, 1)[0];
+  res.json({ success: true, data: deleted });
+});
 
-  if (vehicles.length === initialCount) {
-    return res.status(404).json({
-      success: false,
-      message: `Vehicle with ID '${id}' not found.`,
-    });
+// ==========================================
+// Track 4: Driver Safety & Voice Endpoints
+// ==========================================
+
+// Flag / Unflag Vehicle for Safety Check
+app.post('/api/voice/flag-vehicle', (req, res) => {
+  const validation = validateFlagRequest(req.body);
+  if (!validation.valid) {
+    return res.status(400).json({ success: false, message: validation.error });
+  }
+
+  const { vehicleId, reason, flagged = true } = req.body;
+  const result = voiceService.flagVehicle(vehicles, vehicleId, reason, flagged);
+  if (!result.success) {
+    return res.status(404).json({ success: false, message: result.error });
   }
 
   res.json({
     success: true,
-    message: `Vehicle '${id}' decommissioned from active fleet.`,
+    message: flagged ? `Vehicle ${vehicleId} flagged for safety check.` : `Vehicle ${vehicleId} safety flag removed.`,
+    data: result.vehicle,
+  });
+});
+
+// Trigger a Mock Voice Safety Check Call
+app.post('/api/voice/calls/trigger', async (req, res) => {
+  const validation = validateTriggerRequest(req.body);
+  if (!validation.valid) {
+    return res.status(400).json({ success: false, message: validation.error });
+  }
+
+  const { vehicleId, triggerSource = 'MANUAL_OPERATOR', flagReason, simulatedOutcome, customResponse } = req.body;
+  const result = await voiceService.triggerSafetyCall(vehicles, {
+    vehicleId,
+    triggerSource,
+    flagReason,
+    simulatedOutcome,
+    customResponse,
+  });
+
+  if (!result.success) {
+    const statusCode = result.cooldown ? 429 : 400;
+    return res.status(statusCode).json({ success: false, message: result.error, cooldownRemainingMs: result.cooldownRemainingMs });
+  }
+
+  res.status(201).json({
+    success: true,
+    message: `Safety call session initiated for vehicle ${vehicleId}.`,
+    data: {
+      session: result.session,
+      vehicle: result.vehicle,
+    },
+  });
+});
+
+// List All Safety Call Sessions
+app.get('/api/voice/calls', (req, res) => {
+  const { vehicleId } = req.query;
+  const sessions = voiceService.getSessions(vehicleId);
+  res.json({
+    success: true,
+    count: sessions.length,
+    data: sessions,
+  });
+});
+
+// Get Single Call Session by ID
+app.get('/api/voice/calls/:callId', (req, res) => {
+  const { callId } = req.params;
+  const session = voiceService.getSessionById(callId);
+  if (!session) {
+    return res.status(404).json({ success: false, message: `Safety call session ${callId} not found.` });
+  }
+
+  res.json({
+    success: true,
+    data: session,
+  });
+});
+
+// Resolve Operator Escalation for a Call Session
+app.post('/api/voice/calls/:callId/resolve', (req, res) => {
+  const { callId } = req.params;
+  const { notes = 'Escalation resolved by operator.' } = req.body;
+  const result = voiceService.resolveEscalation(vehicles, callId, notes);
+
+  if (!result.success) {
+    return res.status(404).json({ success: false, message: result.error });
+  }
+
+  res.json({
+    success: true,
+    message: `Escalation for session ${callId} resolved.`,
+    data: result.session,
+  });
+});
+
+// Direct Simulation Helper Endpoint (Dev/Test)
+app.post('/api/voice/simulate-call', async (req, res) => {
+  const { vehicleId, simulatedOutcome = 'BREAKDOWN', flagReason = 'Test simulated safety audit' } = req.body;
+  if (!vehicleId) {
+    return res.status(400).json({ success: false, message: 'vehicleId is required.' });
+  }
+
+  const result = await voiceService.triggerSafetyCall(vehicles, {
+    vehicleId,
+    triggerSource: 'DEV_SIMULATION',
+    flagReason,
+    simulatedOutcome,
+  });
+
+  if (!result.success) {
+    return res.status(400).json({ success: false, message: result.error });
+  }
+
+  res.json({
+    success: true,
+    message: `Simulation executed with outcome ${simulatedOutcome}.`,
+    data: {
+      session: result.session,
+      vehicle: result.vehicle,
+    },
   });
 });
 
 // ==========================================
-// AI-Powered Disruption-Aware Dynamic Route Planner
+// Route Planning & Disruption Intelligence
 // ==========================================
 const NER_HUB_LOCATIONS = {
   Guwahati: { lat: 26.1445, lng: 91.7362 },
   Shillong: { lat: 25.5788, lng: 91.8933 },
   Silchar: { lat: 24.8170, lng: 92.7960 },
+  Dimapur: { lat: 25.9068, lng: 93.7273 },
   Imphal: { lat: 24.8170, lng: 93.9368 },
-  Agartala: { lat: 23.8315, lng: 91.2868 },
-  Aizawl: { lat: 23.7271, lng: 92.7176 },
-  Kohima: { lat: 25.6751, lng: 94.1086 },
   Itanagar: { lat: 27.0844, lng: 93.6053 },
+  Aizawl: { lat: 23.7271, lng: 92.7176 },
+  Agartala: { lat: 23.8315, lng: 91.2868 },
   Gangtok: { lat: 27.3389, lng: 88.6065 },
-  Siliguri: { lat: 26.7271, lng: 88.3953 },
-  Dimapur: { lat: 25.9090, lng: 93.7266 },
-  Nagaon: { lat: 26.3456, lng: 92.6841 },
-  Haflong: { lat: 25.1667, lng: 93.0167 },
-  Jiribam: { lat: 24.8021, lng: 93.1235 },
-  Sonapur: { lat: 25.1147, lng: 92.3685 },
+  Kohima: { lat: 25.6751, lng: 94.1086 },
+  Tezpur: { lat: 26.6338, lng: 92.7926 },
   Jorhat: { lat: 26.7509, lng: 94.2037 },
-  Dibrugarh: { lat: 27.4728, lng: 94.9120 },
 };
 
 app.post('/api/routes/plan', async (req, res) => {
   try {
     const {
-      origin,
-      destination,
-      vehicleType = 'Heavy Cargo Truck',
-      cargo = 'Relief Supplies',
+      origin = 'Guwahati',
+      destination = 'Silchar',
+      vehicleType = 'Heavy Truck (10-Wheeler)',
+      cargo = 'Relief Supplies & Medicines',
       priority = 'HIGH',
       avoidDisruptions = true,
     } = req.body;
 
-    if (!origin || !destination) {
-      return res.status(400).json({
-        success: false,
-        message: 'Origin and destination are required for route calculation.',
-      });
-    }
+    const originCoords = NER_HUB_LOCATIONS[origin] || NER_HUB_LOCATIONS['Guwahati'];
+    const destCoords = NER_HUB_LOCATIONS[destination] || NER_HUB_LOCATIONS['Silchar'];
 
-    const originCoords = NER_HUB_LOCATIONS[origin] || { lat: 26.1445, lng: 91.7362 };
-    const destCoords = NER_HUB_LOCATIONS[destination] || { lat: 24.8170, lng: 92.7960 };
+    const isSonapurAvoided = (origin === 'Guwahati' && destination === 'Silchar') ||
+      (origin === 'Shillong' && destination === 'Silchar') ||
+      (origin === 'Guwahati' && destination === 'Agartala');
 
-    const activeDisruptions = incidents
-      .filter((i) => i.severity === 'CRITICAL' || i.severity === 'HIGH')
-      .map((i) => `${i.title} (${i.corridorName}, Severity: ${i.severity})`);
-
-    const criticalWeather = weather
-      .filter((w) => w.landslideRisk === 'CRITICAL' || w.landslideRisk === 'HIGH')
-      .map((w) => `${w.location}: ${w.rainfallMm}mm rain, ${w.condition}`);
-
-    const groqApiKey = process.env.GROQ_API_KEY;
-    const routeModel = process.env.GROQ_ROUTE_MODEL || 'openai/gpt-oss-120b';
+    const activeCriticalIncidents = incidents.filter((i) => i.severity === 'CRITICAL' || i.severity === 'HIGH');
+    const criticalWeather = weather.filter((w) => w.alertLevel === 'RED' || w.alertLevel === 'AMBER').map((w) => `${w.district} (${w.condition})`);
 
     let aiPlan = null;
-
-    if (groqApiKey) {
+    const groqKey = process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
+    if (groqKey && groqKey !== 'mock-groq-api-key') {
       try {
-        console.log(`[NER Route Planner] Requesting AI path optimization (${routeModel}) for ${origin} → ${destination}...`);
+        const groqPrompt = `You are the NER Disruption-Aware Tactical Route AI for the Brahmaputra Strategic Logistics Corridor.
+Plan the optimal route from ${origin} to ${destination} for a ${vehicleType} carrying ${cargo} with priority ${priority}.
+Active Corridor Incidents: ${JSON.stringify(activeCriticalIncidents.map(i => ({ title: i.title, loc: i.location, sev: i.severity })))}
+Critical Weather: ${criticalWeather.join(', ') || 'Normal'}
+Avoid Disruptions: ${avoidDisruptions}
 
-        const promptText = `You are the chief GIS routing and disaster-resilient logistics AI for the North Eastern Region (NER) of India.
-Plan an optimal, disruption-aware freight convoy route from "${origin}" to "${destination}".
-Vehicle Details: ${vehicleType} carrying ${cargo} (Priority: ${priority}).
-Avoid Disruptions: ${avoidDisruptions ? 'YES - MUST BYPASS ALL ACTIVE LANDSLIDES & IMPASSABLE BRIDGES' : 'NO'}.
-
-Current Real-Time Ground Disruption Telemetry:
-- Active Landslides / Bottlenecks: ${activeDisruptions.length > 0 ? activeDisruptions.join('; ') : 'None Reported'}
-- High Risk Monsoon Corridors: ${criticalWeather.length > 0 ? criticalWeather.join('; ') : 'Nominal'}
-- Strategic Arterial Corridors in Region: NH-27 (Guwahati-Dimapur), NH-6 (Shillong-Silchar via Sonapur), NH-37 (Silchar-Imphal via Jiribam), NH-15 (North Bank Assam-Itanagar), NH-8 (Silchar-Agartala), NH-10 (Siliguri-Gangtok), Haflong-Umrangso Bypass.
-
-Calculate an optimal route plan and respond ONLY with a JSON object in this exact schema (no markdown formatting, valid JSON only):
+Respond STRICTLY in JSON:
 {
-  "recommendedCorridor": "string (e.g. NH-27 Nagaon -> Haflong Pass Bypass -> Silchar)",
+  "recommendedCorridor": "string route description with highways e.g. NH-27 -> Haflong -> Silchar",
+  "distanceKm": 340,
+  "estimatedDurationHours": 6.5,
+  "delayAvoidedMinutes": 240,
+  "avoidedIncidents": ["list of avoided incident titles"],
+  "activeHazardsOnPath": ["advisories"],
+  "terrainAdvisory": "string advisory",
+  "summary": "string tactical summary",
   "status": "OPTIMAL_CALCULATED",
-  "distanceKm": number,
-  "estimatedDurationHours": number,
-  "delayAvoidedMinutes": number,
-  "avoidedIncidents": ["string"],
-  "activeHazardsOnPath": ["string"],
-  "terrainAdvisory": "string",
-  "summary": "string",
   "waypoints": [
-    { "name": "${origin}", "lat": ${originCoords.lat}, "lng": ${originCoords.lng}, "type": "ORIGIN", "note": "Convoy Departure Hub" },
-    { "name": "Intermediate Transit Hub", "lat": number, "lng": number, "type": "DETOUR"|"TRANSIT", "note": "string" },
-    { "name": "${destination}", "lat": ${destCoords.lat}, "lng": ${destCoords.lng}, "type": "DESTINATION", "note": "Delivery Destination" }
+    {"name": "${origin} Hub", "lat": ${originCoords.lat}, "lng": ${originCoords.lng}, "type": "ORIGIN", "note": "Departure terminal"},
+    {"name": "${destination} Terminal", "lat": ${destCoords.lat}, "lng": ${destCoords.lng}, "type": "DESTINATION", "note": "Delivery point"}
   ]
 }`;
-
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 12000);
         const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${groqApiKey}`,
+            Authorization: `Bearer ${groqKey}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            model: routeModel,
-            messages: [
-              {
-                role: 'system',
-                content: 'You are an expert GIS logistics route planning engine for North East India. Return strict JSON.',
-              },
-              { role: 'user', content: promptText },
-            ],
-            temperature: 0.2,
-            max_tokens: 500,
+            model: 'llama-3.3-70b-versatile',
+            messages: [{ role: 'user', content: groqPrompt }],
             response_format: { type: 'json_object' },
+            temperature: 0.2,
           }),
+          signal: controller.signal,
         });
-
+        clearTimeout(timeout);
         if (groqRes.ok) {
-          const groqData = await groqRes.json();
-          const content = groqData.choices?.[0]?.message?.content;
-          if (content) {
-            aiPlan = JSON.parse(content);
-          }
-        } else {
-          console.warn('[NER Route Planner] Groq API returned status:', groqRes.status);
+          const parsed = await groqRes.json();
+          const raw = parsed.choices?.[0]?.message?.content;
+          if (raw) aiPlan = JSON.parse(raw);
         }
       } catch (err) {
-        console.warn('[NER Route Planner] Groq inference fallback activated:', err.message);
+        console.warn('[NER Route Planner] Groq dynamic planning fallback to local heuristics:', err.message);
       }
     }
 
-    // Topographical Algorithmic Fallback & Route Synthesizer
-    const isSonapurAvoided = avoidDisruptions && (origin === 'Guwahati' || origin === 'Shillong') && (destination === 'Silchar' || destination === 'Imphal' || destination === 'Agartala' || destination === 'Aizawl');
-    const isJiribamAvoided = avoidDisruptions && destination === 'Imphal';
-
     const defaultWaypoints = [
-      { name: `${origin} Departure Hub`, lat: originCoords.lat, lng: originCoords.lng, type: 'ORIGIN', note: 'Start of transit route' },
+      { name: `${origin} Central Hub`, lat: originCoords.lat, lng: originCoords.lng, type: 'ORIGIN', note: 'Primary dispatch point' },
     ];
 
-    if (isSonapurAvoided) {
-      defaultWaypoints.push({ name: 'Nagaon Transit Junction (NH-27)', lat: 26.3456, lng: 92.6841, type: 'TRANSIT', note: 'Diverting north of Meghalaya plateau' });
-      defaultWaypoints.push({ name: 'Haflong High-Pass Detour', lat: 25.1667, lng: 93.0167, type: 'DETOUR', note: 'Bypassing blocked Sonapur Tunnel' });
-      if (destination !== 'Silchar') {
+    if (isSonapurAvoided && avoidDisruptions) {
+      if (origin === 'Guwahati' && destination === 'Silchar') {
+        defaultWaypoints.push({ name: 'Nagaon Bypass Junction (NH-27)', lat: 26.3450, lng: 92.6840, type: 'TRANSIT', note: 'Detour entry avoiding NH-6 Sonapur bottleneck' });
+        defaultWaypoints.push({ name: 'Haflong Mountain Highway Staging (NH-627)', lat: 25.1667, lng: 93.0167, type: 'TRANSIT', note: 'Safe terrain corridor' });
         defaultWaypoints.push({ name: 'Silchar Distribution Depot', lat: 24.8170, lng: 92.7960, type: 'TRANSIT', note: 'Barak Valley cross-docking junction' });
       }
     } else if (origin !== destination) {
