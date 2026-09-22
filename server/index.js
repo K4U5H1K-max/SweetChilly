@@ -7,6 +7,14 @@ import { fileURLToPath } from 'url';
 import { voiceService } from './voice/voiceService.js';
 import { validateFlagRequest, validateTriggerRequest, validateAndNormalizePhone, maskPhone } from './voice/securityGuardrails.js';
 import { processStatusWebhook } from './voice/webhookHandler.js';
+import { getPool, isDatabaseConfigured, testConnection, initializeDatabase, vehicleRepository, deploymentRepository, userRepository } from './db/index.js';
+import { validateAndNormalizeEmail, validatePassword, hashPassword, verifyPassword, generateToken, toSafeUser, getJwtSecret } from './auth/authUtils.js';
+import { authenticateUser, requireRole, optionalAuth } from './auth/authMiddleware.js';
+
+// Link repositories for backward-compatibility active deployment and safe owner projections
+vehicleRepository.setDeploymentRepository(deploymentRepository);
+vehicleRepository.setUserRepository(userRepository);
+deploymentRepository.setVehicleRepository(vehicleRepository);
 
 dotenv.config();
 
@@ -186,6 +194,17 @@ let alerts = [
   },
 ];
 
+// =========================================================================
+// TEMPORARY SYNCHRONOUS TRACK 4 COMPATIBILITY CACHE
+//
+// Authoritative Model:
+// - PostgreSQL is the AUTHORITATIVE persistent vehicle source whenever DATABASE_URL is set.
+// - `vehicles[]` is a temporary synchronous compatibility cache for Track 4 voiceService.
+// - Normal CRUD operations refresh this cache from vehicleRepository.
+// - Track 4 direct object mutations temporarily exist in memory until Phase 3A.3
+//   migrates those mutations to repository/database writes.
+// - Phase 3A.3 will remove/directly replace this synchronous mutation dependency.
+// =========================================================================
 let vehicles = [
   {
     id: 'VEH-NER-101',
@@ -392,6 +411,130 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString(),
     nodeEnv: process.env.NODE_ENV || 'development',
     groqConfigured: !!process.env.GROQ_API_KEY,
+  });
+});
+
+// ==========================================
+// Authentication & Identity Endpoints
+// ==========================================
+
+/**
+ * Public User Registration
+ * Strictly creates 'USER' role accounts. Client attempts to pass 'ADMIN' are rejected/forced to 'USER'.
+ */
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { fullName, email, password } = req.body || {};
+
+    if (!fullName || typeof fullName !== 'string' || !fullName.trim()) {
+      return res.status(400).json({ success: false, message: 'Full name is required.' });
+    }
+
+    const emailVal = validateAndNormalizeEmail(email);
+    if (!emailVal.valid) {
+      return res.status(400).json({ success: false, message: emailVal.error });
+    }
+
+    const passVal = validatePassword(password);
+    if (!passVal.valid) {
+      return res.status(400).json({ success: false, message: passVal.error });
+    }
+
+    const existing = await userRepository.getUserByEmail(emailVal.email);
+    if (existing) {
+      return res.status(409).json({ success: false, message: 'An account with this email already exists.' });
+    }
+
+    const passwordHash = await hashPassword(password);
+    // Privilege Escalation Prevention: Force role to USER
+    const newUser = await userRepository.createUser({
+      fullName: fullName.trim(),
+      email: emailVal.email,
+      passwordHash,
+      role: 'USER',
+      isActive: true,
+    });
+
+    const token = generateToken(newUser);
+    const safeUser = toSafeUser(newUser);
+
+    console.log(`[Auth API] New user registered: ${safeUser.id} (${safeUser.email})`);
+    res.status(201).json({
+      success: true,
+      message: 'Account registered successfully.',
+      token,
+      user: safeUser,
+    });
+  } catch (err) {
+    console.error('[Auth API] Registration error:', err.message);
+    res.status(500).json({ success: false, message: 'Failed to complete registration.' });
+  }
+});
+
+/**
+ * User / Admin Login
+ */
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body || {};
+
+    if (!email || !password) {
+      return res.status(400).json({ success: false, message: 'Email and password are required.' });
+    }
+
+    const emailVal = validateAndNormalizeEmail(email);
+    if (!emailVal.valid) {
+      return res.status(401).json({ success: false, message: 'Invalid email or password.' });
+    }
+
+    const user = await userRepository.getUserByEmail(emailVal.email);
+    if (!user) {
+      // Generic invalid credentials response to prevent account enumeration
+      return res.status(401).json({ success: false, message: 'Invalid email or password.' });
+    }
+
+    const isMatch = await verifyPassword(password, user.passwordHash);
+    if (!isMatch) {
+      return res.status(401).json({ success: false, message: 'Invalid email or password.' });
+    }
+
+    if (!user.isActive) {
+      return res.status(403).json({ success: false, message: 'Account has been deactivated. Please contact administrator.' });
+    }
+
+    const token = generateToken(user);
+    const safeUser = toSafeUser(user);
+
+    console.log(`[Auth API] Authentication successful: ${safeUser.id} (${safeUser.role})`);
+    res.json({
+      success: true,
+      message: 'Authentication successful.',
+      token,
+      user: safeUser,
+    });
+  } catch (err) {
+    console.error('[Auth API] Login error:', err.message);
+    res.status(500).json({ success: false, message: 'Internal authentication failure.' });
+  }
+});
+
+/**
+ * Authenticated User Profile
+ */
+app.get('/api/auth/me', authenticateUser, (req, res) => {
+  res.json({
+    success: true,
+    user: req.user,
+  });
+});
+
+/**
+ * Logout
+ */
+app.post('/api/auth/logout', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Logged out successfully.',
   });
 });
 
@@ -639,24 +782,32 @@ Respond ONLY with a JSON object in this exact schema (no surrounding markdown te
   }
 });
 
-// Manual Incident Creation Fallback
-app.post('/api/incidents', (req, res) => {
-  const { title, location, district, severity, lat, lng, type, description, affectedCorridor } = req.body;
+// Incident Creation Endpoint
+app.post('/api/incidents', optionalAuth, (req, res) => {
+  const { title, location, district, severity, lat, lng, type, incidentType, description, affectedCorridor } = req.body;
+  const reporterName = req.user ? req.user.fullName : (req.body.reportedBy || 'NER Logistics Operator');
+  const reporterId = req.user ? req.user.id : null;
+  const reporterRole = req.user ? req.user.role : 'PUBLIC';
+
   const newInc = {
     id: `INC-NER-${Date.now().toString(36).toUpperCase()}`,
-    title: title || 'Reported Hazard',
+    title: title || 'Reported Corridor Hazard',
     location: location || 'NER Corridor',
-    district: district || 'Unknown',
+    district: district || 'Unknown District',
     severity: severity || 'MEDIUM',
     lat: parseFloat(lat) || 26.1445,
     lng: parseFloat(lng) || 91.7362,
-    type: type || 'OBSTRUCTION',
+    type: incidentType || type || 'OBSTRUCTION',
     description: description || '',
     affectedCorridor: affectedCorridor || 'General Transit Arterial',
     verified: false,
+    reportedBy: reporterName,
+    reporterId,
+    reporterRole,
     reportedAt: new Date().toISOString(),
   };
   incidents.unshift(newInc);
+  console.log(`[Incident Reporting] New incident ${newInc.id} recorded by ${reporterName} (${reporterRole}): ${newInc.title}`);
   res.status(201).json({ success: true, data: newInc });
 });
 
@@ -672,88 +823,385 @@ app.get('/api/alerts', (req, res) => {
 // ==========================================
 // Vehicle Fleet Management Endpoints
 // ==========================================
-app.get('/api/vehicles', (req, res) => {
-  res.json({
-    success: true,
-    count: vehicles.length,
-    data: vehicles,
-  });
+app.get('/api/vehicles', optionalAuth, async (req, res) => {
+  try {
+    const isUser = req.user && req.user.role === 'USER';
+    const list = isUser
+      ? await vehicleRepository.getAllVehicles({ ownerUserId: req.user.id })
+      : await vehicleRepository.getAllVehicles();
+
+    const projectedList = await Promise.all(
+      list.map(async (v) => {
+        const projected = await vehicleRepository.projectActiveDeployment(v);
+        if (req.user && req.user.role === 'ADMIN') {
+          return await vehicleRepository.attachSafeOwner(projected);
+        }
+        return projected;
+      })
+    );
+    vehicles = projectedList;
+    res.json({
+      success: true,
+      count: projectedList.length,
+      data: projectedList,
+    });
+  } catch (err) {
+    console.error('[Vehicle API] Error retrieving vehicles:', err.message);
+    res.status(500).json({ success: false, message: 'Failed to retrieve vehicle fleet.' });
+  }
 });
 
-app.post('/api/vehicles', (req, res) => {
-  const v = req.body;
-
-  let driverPhone = v.driverPhone || '+91-98765-43210';
-  if (v.driverPhone) {
-    const phoneVal = validateAndNormalizePhone(v.driverPhone);
-    if (!phoneVal.valid) {
-      return res.status(400).json({ success: false, message: phoneVal.error });
+app.get('/api/vehicles/:id', optionalAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const vehicle = await vehicleRepository.getVehicleById(id);
+    if (!vehicle) {
+      return res.status(404).json({ success: false, message: `Vehicle '${id}' not found.` });
     }
-    driverPhone = phoneVal.phone;
-  }
 
-  const newVeh = {
-    id: v.id || `VEH-NER-${Date.now().toString(36).toUpperCase()}`,
-    regNumber: v.regNumber || 'AS-01-XX-0000',
-    name: v.name || 'NER Freight Unit',
-    type: v.type || 'Standard Cargo Truck',
-    capacity: v.capacity || '5 Ton',
-    cargo: v.cargo || 'General Freight',
-    status: v.status || 'IN_TRANSIT',
-    speedKmH: Number(v.speedKmH) || 45,
-    origin: v.origin || 'Guwahati',
-    destination: v.destination || 'Silchar',
-    currentPos: v.currentPos || { lat: 26.1445, lng: 91.7362 },
-    assignedCorridor: v.assignedCorridor || 'NH-27',
-    delayEstMinutes: Number(v.delayEstMinutes) || 0,
-    priority: v.priority || 'MEDIUM',
-    driverName: v.driverName || 'Driver',
-    driverPhone: driverPhone,
-    isFlagged: Boolean(v.isFlagged),
-    flagReason: v.flagReason || null,
-    safetyStatus: v.safetyStatus || 'NOT_CHECKED',
-    lastSafetyCheck: v.lastSafetyCheck || null,
-    activeCallId: v.activeCallId || null,
-  };
-  vehicles.push(newVeh);
-  console.log(`[Fleet Management] New vehicle ${newVeh.id} registered (Driver: ${newVeh.driverName}, Phone: ${maskPhone(newVeh.driverPhone)})`);
-  res.status(201).json({ success: true, data: newVeh });
-});
-
-app.put('/api/vehicles/:id', (req, res) => {
-  const { id } = req.params;
-  const idx = vehicles.findIndex((v) => v.id === id);
-  if (idx === -1) {
-    return res.status(404).json({ success: false, message: `Vehicle ${id} not found.` });
-  }
-
-  const updates = { ...req.body };
-  if (updates.driverPhone !== undefined) {
-    const phoneVal = validateAndNormalizePhone(updates.driverPhone);
-    if (!phoneVal.valid) {
-      return res.status(400).json({ success: false, message: phoneVal.error });
+    // USER role may only access own vehicles; unauthorized returns 404 to avoid enumeration
+    if (req.user && req.user.role === 'USER' && vehicle.ownerUserId !== req.user.id) {
+      return res.status(404).json({ success: false, message: `Vehicle '${id}' not found.` });
     }
-    updates.driverPhone = phoneVal.phone;
+
+    let projected = await vehicleRepository.projectActiveDeployment(vehicle);
+    if (req.user && req.user.role === 'ADMIN') {
+      projected = await vehicleRepository.attachSafeOwner(projected);
+    }
+
+    res.json({ success: true, data: projected });
+  } catch (err) {
+    console.error('[Vehicle API] Error retrieving vehicle:', err.message);
+    res.status(500).json({ success: false, message: 'Failed to retrieve vehicle.' });
   }
-
-  vehicles[idx] = {
-    ...vehicles[idx],
-    ...updates,
-    updatedAt: new Date().toISOString(),
-  };
-
-  console.log(`[Fleet Management] Vehicle ${id} updated (Driver: ${vehicles[idx].driverName}, Phone: ${maskPhone(vehicles[idx].driverPhone)})`);
-  res.json({ success: true, data: vehicles[idx] });
 });
 
-app.delete('/api/vehicles/:id', (req, res) => {
-  const { id } = req.params;
-  const idx = vehicles.findIndex((v) => v.id === id);
-  if (idx === -1) {
-    return res.status(404).json({ success: false, message: `Vehicle ${id} not found.` });
+app.post('/api/vehicles', authenticateUser, async (req, res) => {
+  try {
+    const v = req.body;
+    const isUser = req.user.role === 'USER';
+
+    let driverPhone = v.driverPhone || '+91-98765-43210';
+    if (v.driverPhone) {
+      const phoneVal = validateAndNormalizePhone(v.driverPhone);
+      if (!phoneVal.valid) {
+        return res.status(400).json({ success: false, message: phoneVal.error });
+      }
+      driverPhone = phoneVal.phone;
+    }
+
+    // Server-Controlled Ownership:
+    // USER accounts are strictly assigned req.user.id as owner (client payloads ignored)
+    // ADMIN accounts default to null (admin-managed) unless specified
+    const ownerUserId = isUser ? req.user.id : (v.ownerUserId || null);
+
+    const newVeh = await vehicleRepository.createVehicle({
+      ...v,
+      driverPhone,
+      ownerUserId,
+    });
+
+    const projected = await vehicleRepository.projectActiveDeployment(newVeh);
+    vehicles = await vehicleRepository.getAllVehicles();
+    console.log(`[Fleet Management] New vehicle ${newVeh.id} registered (Owner: ${newVeh.ownerUserId || 'ADMIN-MANAGED'}, Driver: ${newVeh.driverName}, Phone: ${maskPhone(newVeh.driverPhone)})`);
+    res.status(201).json({ success: true, data: projected });
+  } catch (err) {
+    console.error('[Vehicle API] Error registering vehicle:', err.message);
+    res.status(500).json({ success: false, message: 'Failed to register vehicle.' });
   }
-  const deleted = vehicles.splice(idx, 1)[0];
-  res.json({ success: true, data: deleted });
+});
+
+app.put('/api/vehicles/:id', authenticateUser, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const existing = await vehicleRepository.getVehicleById(id);
+    if (!existing) {
+      return res.status(404).json({ success: false, message: `Vehicle '${id}' not found.` });
+    }
+
+    // If USER role, verify ownership (IDOR guard)
+    if (req.user.role === 'USER' && existing.ownerUserId !== req.user.id) {
+      return res.status(404).json({ success: false, message: `Vehicle '${id}' not found.` });
+    }
+
+    const updates = { ...req.body };
+    // Strip client attempts to alter ownership or vehicle ID
+    delete updates.id;
+    delete updates.ownerUserId;
+    delete updates.owner_user_id;
+
+    if (updates.driverPhone !== undefined) {
+      const phoneVal = validateAndNormalizePhone(updates.driverPhone);
+      if (!phoneVal.valid) {
+        return res.status(400).json({ success: false, message: phoneVal.error });
+      }
+      updates.driverPhone = phoneVal.phone;
+    }
+
+    const updated = await vehicleRepository.updateVehicle(id, updates);
+    const projected = await vehicleRepository.projectActiveDeployment(updated);
+    vehicles = await vehicleRepository.getAllVehicles();
+
+    console.log(`[Fleet Management] Vehicle ${id} updated (Driver: ${updated.driverName}, Phone: ${maskPhone(updated.driverPhone)})`);
+    res.json({ success: true, data: projected });
+  } catch (err) {
+    console.error('[Vehicle API] Error updating vehicle:', err.message);
+    res.status(500).json({ success: false, message: 'Failed to update vehicle.' });
+  }
+});
+
+app.delete('/api/vehicles/:id', authenticateUser, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const existing = await vehicleRepository.getVehicleById(id);
+    if (!existing) {
+      return res.status(404).json({ success: false, message: `Vehicle '${id}' not found.` });
+    }
+
+    // If USER role, verify ownership (IDOR guard)
+    if (req.user.role === 'USER' && existing.ownerUserId !== req.user.id) {
+      return res.status(404).json({ success: false, message: `Vehicle '${id}' not found.` });
+    }
+
+    // Safety guard 1: reject deletion while an active safety call is in progress
+    if (existing.safetyStatus === 'PENDING_CALL') {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot delete vehicle ${id} while an active safety call is in progress.`,
+      });
+    }
+
+    // Safety guard 2: reject deletion while an active deployment is in progress
+    const activeDeployment = await deploymentRepository.getActiveDeploymentByVehicleId(id);
+    if (activeDeployment) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot delete vehicle ${id} while an active deployment (${activeDeployment.id}) is in progress. Complete or cancel deployment first.`,
+      });
+    }
+
+    // Safety guard 3: restrict deletion if historical deployments exist (preserving relational integrity)
+    const historicalDeployments = await deploymentRepository.getDeploymentsByVehicleId(id);
+    if (historicalDeployments && historicalDeployments.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot delete vehicle ${id} because ${historicalDeployments.length} historical deployment record(s) exist. Deletion is restricted to preserve audit history.`,
+      });
+    }
+
+    const deleted = await vehicleRepository.deleteVehicle(id);
+    if (!deleted) {
+      return res.status(404).json({ success: false, message: `Vehicle '${id}' not found.` });
+    }
+    vehicles = await vehicleRepository.getAllVehicles();
+    res.json({ success: true, data: deleted });
+  } catch (err) {
+    console.error('[Vehicle API] Error deleting vehicle:', err.message);
+    res.status(500).json({ success: false, message: 'Failed to delete vehicle.' });
+  }
+});
+
+// ==========================================
+// Vehicle Deployment / Trip Management Endpoints
+// ==========================================
+
+app.get('/api/deployments', optionalAuth, async (req, res) => {
+  try {
+    const { status, vehicleId } = req.query;
+    const isUser = req.user && req.user.role === 'USER';
+    const filters = { status, vehicleId };
+    if (isUser) {
+      filters.ownerUserId = req.user.id;
+    }
+
+    const list = await deploymentRepository.getAllDeployments(filters);
+    res.json({
+      success: true,
+      count: list.length,
+      data: list,
+    });
+  } catch (err) {
+    console.error('[Deployment API] Error retrieving deployments:', err.message);
+    res.status(500).json({ success: false, message: 'Failed to retrieve deployments.' });
+  }
+});
+
+app.get('/api/deployments/:id', optionalAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deployment = await deploymentRepository.getDeploymentById(id);
+    if (!deployment) {
+      return res.status(404).json({ success: false, message: `Deployment '${id}' not found.` });
+    }
+
+    // Scoped retrieval for USER: check underlying vehicle ownership
+    if (req.user && req.user.role === 'USER') {
+      const vehicle = await vehicleRepository.getVehicleById(deployment.vehicleId);
+      if (!vehicle || vehicle.ownerUserId !== req.user.id) {
+        return res.status(404).json({ success: false, message: `Deployment '${id}' not found.` });
+      }
+    }
+
+    res.json({ success: true, data: deployment });
+  } catch (err) {
+    console.error('[Deployment API] Error retrieving deployment:', err.message);
+    res.status(500).json({ success: false, message: 'Failed to retrieve deployment.' });
+  }
+});
+
+app.get('/api/vehicles/:vehicleId/deployments', optionalAuth, async (req, res) => {
+  try {
+    const { vehicleId } = req.params;
+    const { status } = req.query;
+
+    const vehicle = await vehicleRepository.getVehicleById(vehicleId);
+    if (!vehicle) {
+      return res.status(404).json({ success: false, message: `Vehicle '${vehicleId}' not found.` });
+    }
+
+    // Scoped retrieval for USER: check vehicle ownership
+    if (req.user && req.user.role === 'USER' && vehicle.ownerUserId !== req.user.id) {
+      return res.status(404).json({ success: false, message: `Vehicle '${vehicleId}' not found.` });
+    }
+
+    const list = await deploymentRepository.getDeploymentsByVehicleId(vehicleId, { status });
+    res.json({
+      success: true,
+      vehicleId,
+      count: list.length,
+      data: list,
+    });
+  } catch (err) {
+    console.error('[Deployment API] Error retrieving vehicle deployments:', err.message);
+    res.status(500).json({ success: false, message: 'Failed to retrieve vehicle deployments.' });
+  }
+});
+
+app.post('/api/deployments', authenticateUser, async (req, res) => {
+  try {
+    const { vehicleId, origin, destination, assignedCorridor, cargo, priority, status } = req.body;
+
+    if (!vehicleId) {
+      return res.status(400).json({ success: false, message: 'vehicleId is required.' });
+    }
+    if (!origin || !destination) {
+      return res.status(400).json({ success: false, message: 'origin and destination are required.' });
+    }
+
+    const vehicle = await vehicleRepository.getVehicleById(vehicleId);
+    if (!vehicle) {
+      return res.status(404).json({ success: false, message: `Vehicle '${vehicleId}' not found in registry.` });
+    }
+
+    // USER role must own the vehicle to deploy it
+    if (req.user.role === 'USER' && vehicle.ownerUserId !== req.user.id) {
+      return res.status(404).json({ success: false, message: `Vehicle '${vehicleId}' not found in registry.` });
+    }
+
+    // Check if vehicle already has an active deployment
+    const activeDep = await deploymentRepository.getActiveDeploymentByVehicleId(vehicleId);
+    if (activeDep) {
+      return res.status(409).json({
+        success: false,
+        message: `Vehicle '${vehicleId}' already has an active deployment (${activeDep.id} - ${activeDep.origin} → ${activeDep.destination}). Complete or cancel it before deploying again.`,
+      });
+    }
+
+    const newDep = await deploymentRepository.createDeployment({
+      vehicleId,
+      origin,
+      destination,
+      assignedCorridor: assignedCorridor || `${origin} - ${destination}`,
+      cargo: cargo || vehicle.cargo || 'General Relief Cargo',
+      priority: priority || vehicle.priority || 'MEDIUM',
+      status: status || 'ACTIVE',
+    });
+
+    console.log(`[Deployment Management] New deployment ${newDep.id} created for vehicle ${vehicleId} (${origin} → ${destination})`);
+    res.status(201).json({ success: true, data: newDep });
+  } catch (err) {
+    console.error('[Deployment API] Error creating deployment:', err.message);
+    const isConflict = err.message && err.message.includes('already has an active deployment');
+    res.status(isConflict ? 409 : 400).json({
+      success: false,
+      message: err.message || 'Failed to create deployment.',
+    });
+  }
+});
+
+app.post('/api/deployments/:id/start', authenticateUser, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deployment = await deploymentRepository.getDeploymentById(id);
+    if (!deployment) {
+      return res.status(404).json({ success: false, message: `Deployment '${id}' not found.` });
+    }
+
+    // USER ownership check
+    if (req.user.role === 'USER') {
+      const vehicle = await vehicleRepository.getVehicleById(deployment.vehicleId);
+      if (!vehicle || vehicle.ownerUserId !== req.user.id) {
+        return res.status(404).json({ success: false, message: `Deployment '${id}' not found.` });
+      }
+    }
+
+    const started = await deploymentRepository.startDeployment(id);
+    console.log(`[Deployment Management] Deployment ${id} started for vehicle ${started.vehicleId}`);
+    res.json({ success: true, data: started });
+  } catch (err) {
+    console.error('[Deployment API] Error starting deployment:', err.message);
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/deployments/:id/complete', authenticateUser, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deployment = await deploymentRepository.getDeploymentById(id);
+    if (!deployment) {
+      return res.status(404).json({ success: false, message: `Deployment '${id}' not found.` });
+    }
+
+    // USER ownership check
+    if (req.user.role === 'USER') {
+      const vehicle = await vehicleRepository.getVehicleById(deployment.vehicleId);
+      if (!vehicle || vehicle.ownerUserId !== req.user.id) {
+        return res.status(404).json({ success: false, message: `Deployment '${id}' not found.` });
+      }
+    }
+
+    const completed = await deploymentRepository.completeDeployment(id);
+    console.log(`[Deployment Management] Deployment ${id} completed for vehicle ${completed.vehicleId}`);
+    res.json({ success: true, data: completed });
+  } catch (err) {
+    console.error('[Deployment API] Error completing deployment:', err.message);
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/deployments/:id/cancel', authenticateUser, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deployment = await deploymentRepository.getDeploymentById(id);
+    if (!deployment) {
+      return res.status(404).json({ success: false, message: `Deployment '${id}' not found.` });
+    }
+
+    // USER ownership check
+    if (req.user.role === 'USER') {
+      const vehicle = await vehicleRepository.getVehicleById(deployment.vehicleId);
+      if (!vehicle || vehicle.ownerUserId !== req.user.id) {
+        return res.status(404).json({ success: false, message: `Deployment '${id}' not found.` });
+      }
+    }
+
+    const cancelled = await deploymentRepository.cancelDeployment(id);
+    console.log(`[Deployment Management] Deployment ${id} cancelled for vehicle ${cancelled.vehicleId}`);
+    res.json({ success: true, data: cancelled });
+  } catch (err) {
+    console.error('[Deployment API] Error cancelling deployment:', err.message);
+    res.status(400).json({ success: false, message: err.message });
+  }
 });
 
 // ==========================================
@@ -803,14 +1251,14 @@ app.get('/api/voice/config', (req, res) => {
 });
 
 // Flag / Unflag Vehicle for Safety Check
-app.post('/api/voice/flag-vehicle', (req, res) => {
+app.post('/api/voice/flag-vehicle', authenticateUser, requireRole('ADMIN'), async (req, res) => {
   const validation = validateFlagRequest(req.body);
   if (!validation.valid) {
     return res.status(400).json({ success: false, message: validation.error });
   }
 
   const { vehicleId, reason, flagged = true } = req.body;
-  const result = voiceService.flagVehicle(vehicles, vehicleId, reason, flagged);
+  const result = await voiceService.flagVehicle(vehicles, vehicleId, reason, flagged);
   if (!result.success) {
     return res.status(404).json({ success: false, message: result.error });
   }
@@ -823,7 +1271,7 @@ app.post('/api/voice/flag-vehicle', (req, res) => {
 });
 
 // Trigger a Mock Voice Safety Check Call
-app.post('/api/voice/calls/trigger', async (req, res) => {
+app.post('/api/voice/calls/trigger', authenticateUser, requireRole('ADMIN'), async (req, res) => {
   const validation = validateTriggerRequest(req.body);
   if (!validation.valid) {
     return res.status(400).json({ success: false, message: validation.error });
@@ -879,10 +1327,10 @@ app.get('/api/voice/calls/:callId', (req, res) => {
 });
 
 // Resolve Operator Escalation for a Call Session
-app.post('/api/voice/calls/:callId/resolve', (req, res) => {
+app.post('/api/voice/calls/:callId/resolve', authenticateUser, requireRole('ADMIN'), async (req, res) => {
   const { callId } = req.params;
   const { notes = 'Escalation resolved by operator.' } = req.body;
-  const result = voiceService.resolveEscalation(vehicles, callId, notes);
+  const result = await voiceService.resolveEscalation(vehicles, callId, notes);
 
   if (!result.success) {
     return res.status(404).json({ success: false, message: result.error });
@@ -896,7 +1344,7 @@ app.post('/api/voice/calls/:callId/resolve', (req, res) => {
 });
 
 // Direct Simulation Helper Endpoint (Dev/Test)
-app.post('/api/voice/simulate-call', async (req, res) => {
+app.post('/api/voice/simulate-call', authenticateUser, requireRole('ADMIN'), async (req, res) => {
   const { vehicleId, simulatedOutcome = 'BREAKDOWN', flagReason = 'Test simulated safety audit' } = req.body;
   if (!vehicleId) {
     return res.status(400).json({ success: false, message: 'vehicleId is required.' });
@@ -1179,9 +1627,112 @@ app.use((req, res) => {
   });
 });
 
-// Start Server bound to 0.0.0.0 for Render / cloud environments
-const HOST = '0.0.0.0';
-app.listen(PORT, HOST, () => {
-  console.log(`[NER Backend] Service online and listening on http://${HOST}:${PORT}`);
-  console.log(`[NER Backend] Health check: http://${HOST}:${PORT}/api/health`);
-});
+// =========================================================================
+// Database Startup & Server Initialization
+//
+// Startup Lifecycle:
+// CASE A (DATABASE_URL unset):
+//   - Uses in-memory development repository.
+//   - Logs: "[Database] DATABASE_URL unset. Using in-memory development repository."
+//   - Starts HTTP server normally.
+//
+// CASE B (DATABASE_URL set and connection/schema succeeds):
+//   - Verifies connection with SELECT 1.
+//   - Initializes schema via initializeDatabase(pool) (creates table & seeds if empty).
+//   - Hydrates Track 4 compatibility cache BEFORE server begins accepting traffic.
+//   - Logs success and starts HTTP server.
+//
+// CASE C (DATABASE_URL set but connection/schema fails):
+//   - Rejects startup and logs sanitized fatal error.
+//   - NEVER silently falls back to in-memory mode in production.
+//   - Exits process with non-zero exit code.
+// =========================================================================
+
+export async function initializePersistenceAndHydrate({ exitOnError = true } = {}) {
+  // Enforce JWT secret presence in production
+  if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+    const errorMsg = '[Security Fatal] Insecure production configuration: JWT_SECRET environment variable is required in production mode.';
+    console.error(errorMsg);
+    if (exitOnError) {
+      process.exit(1);
+    }
+    throw new Error(errorMsg);
+  }
+
+  if (!isDatabaseConfigured()) {
+    console.log('[Database] DATABASE_URL unset. Using in-memory development repository.');
+
+    // Bootstrap in-memory admin account for development/testing ONLY if explicitly configured
+    const adminEmail = (process.env.ADMIN_INITIAL_EMAIL || process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+    const adminPass = process.env.ADMIN_INITIAL_PASSWORD || process.env.ADMIN_PASSWORD;
+    const adminName = process.env.ADMIN_INITIAL_NAME || process.env.ADMIN_NAME || 'NER Command Administrator';
+
+    if (adminEmail && adminPass) {
+      const existingAdmin = await userRepository.getUserByEmail(adminEmail);
+      if (!existingAdmin) {
+        const passwordHash = await hashPassword(adminPass);
+        await userRepository.createUser({
+          id: 'USR-NER-ADMIN-001',
+          fullName: adminName,
+          email: adminEmail,
+          passwordHash,
+          role: 'ADMIN',
+          isActive: true,
+        });
+        console.log(`[Database] In-memory administrator account bootstrapped (${adminEmail}).`);
+      }
+    } else {
+      console.log('[Database] No initial admin bootstrap credentials configured (ADMIN_INITIAL_EMAIL / ADMIN_INITIAL_PASSWORD). Skipping in-memory admin bootstrap.');
+    }
+
+    return { mode: 'IN_MEMORY', count: vehicles.length };
+  }
+
+  try {
+    const pool = getPool();
+    const conn = await testConnection();
+    if (!conn.ok) {
+      const sanitizedError = conn.error ? conn.error.replace(/:\/\/[^:]+:([^@]+)@/g, '://[REDACTED_USER]:[REDACTED_SECRET]@') : 'Connection failed';
+      const errorMsg = `[Database] FATAL: DATABASE_URL is configured but PostgreSQL connection failed: ${sanitizedError}`;
+      console.error(errorMsg);
+      if (exitOnError) {
+        process.exit(1);
+      }
+      throw new Error(errorMsg);
+    }
+
+    console.log('[Database] PostgreSQL connection verified.');
+    const initRes = await initializeDatabase(pool);
+    userRepository.setPool(pool);
+    vehicleRepository.setPool(pool);
+    deploymentRepository.setPool(pool);
+
+    // PRE-STARTUP HYDRATION: Hydrate Track 4 compatibility cache BEFORE server listens
+    const loaded = await vehicleRepository.getAllVehicles();
+    vehicles = loaded;
+    console.log(`[Database] Track 4 vehicle compatibility cache hydrated with ${loaded.length} records from PostgreSQL.`);
+
+    return { mode: 'POSTGRESQL', count: loaded.length, seeded: initRes.seeded };
+  } catch (err) {
+    const sanitizedMsg = err.message ? err.message.replace(/:\/\/[^:]+:([^@]+)@/g, '://[REDACTED_USER]:[REDACTED_SECRET]@') : 'Initialization failed';
+    const fatalMsg = `[Database] FATAL: PostgreSQL initialization failed: ${sanitizedMsg}`;
+    console.error(fatalMsg);
+    if (exitOnError) {
+      process.exit(1);
+    }
+    throw new Error(fatalMsg);
+  }
+}
+
+async function startServer() {
+  await initializePersistenceAndHydrate({ exitOnError: true });
+
+  // Start Server bound to 0.0.0.0 for Render / cloud environments
+  const HOST = '0.0.0.0';
+  app.listen(PORT, HOST, () => {
+    console.log(`[NER Backend] Service online and listening on http://${HOST}:${PORT}`);
+    console.log(`[NER Backend] Health check: http://${HOST}:${PORT}/api/health`);
+  });
+}
+
+startServer();

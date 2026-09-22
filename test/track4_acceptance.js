@@ -79,7 +79,7 @@ const testVehicles = [
 
 // Step A: Flag vehicle
 console.log('  Step A: Flagging VEH-NER-101...');
-const flagRes = voiceService.flagVehicle(testVehicles, 'VEH-NER-101', 'Vehicle delayed near active disruption', true);
+const flagRes = await voiceService.flagVehicle(testVehicles, 'VEH-NER-101', 'Vehicle delayed near active disruption', true);
 assert.strictEqual(flagRes.success, true);
 assert.strictEqual(testVehicles[0].isFlagged, true);
 assert.strictEqual(testVehicles[0].flagReason, 'Vehicle delayed near active disruption');
@@ -116,7 +116,7 @@ console.log(`    -> Masked Driver Phone: ${session.driverPhone}`);
 
 // Step D: Operator Escalation Resolution
 console.log('  Step D: Operator Resolving Escalation...');
-const resolveRes = voiceService.resolveEscalation(testVehicles, session.callId, 'Emergency repair truck dispatched from Haflong');
+const resolveRes = await voiceService.resolveEscalation(testVehicles, session.callId, 'Emergency repair truck dispatched from Haflong');
 assert.strictEqual(resolveRes.success, true);
 assert.strictEqual(resolveRes.session.escalationResolved, true);
 assert.strictEqual(resolveRes.session.resolutionNotes, 'Emergency repair truck dispatched from Haflong');

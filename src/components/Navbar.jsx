@@ -1,10 +1,19 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 
 export default function Navbar({ onOpenReportModal, onOpenAddVehicle, onOpenRoutePlanner }) {
   const [activeTab, setActiveTab] = useState('command-center');
   const [timeStr, setTimeStr] = useState('');
   const { backendHealth } = useApp();
+  const { currentUser, logout, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login', { replace: true });
+  };
 
   useEffect(() => {
     const updateTime = () => {
@@ -53,9 +62,14 @@ export default function Navbar({ onOpenReportModal, onOpenAddVehicle, onOpenRout
               <span className="font-mono text-xs tracking-tighter">NER</span>
             </div>
             <div className="flex flex-col">
-              <span className="font-heading font-bold text-base text-slate-900 leading-none tracking-tight">
-                NER Operations Intelligence
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="font-heading font-bold text-base text-slate-900 leading-none tracking-tight">
+                  NER Operations Intelligence
+                </span>
+                <span className="px-2 py-0.5 rounded-full bg-amber-100 border border-amber-200 text-amber-900 text-[10px] font-bold font-mono uppercase tracking-wider hidden sm:inline-block">
+                  Command Center
+                </span>
+              </div>
               <span className="text-xs text-slate-500 font-medium leading-tight mt-1">
                 Logistics & Accessibility Platform
               </span>
@@ -91,12 +105,6 @@ export default function Navbar({ onOpenReportModal, onOpenAddVehicle, onOpenRout
 
         {/* Right Action Hub */}
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* Live Operational Status Pill */}
-          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
-            <span>System operational</span>
-          </div>
-
           {/* Route Planner Action */}
           <button
             onClick={onOpenRoutePlanner}
@@ -123,6 +131,30 @@ export default function Navbar({ onOpenReportModal, onOpenAddVehicle, onOpenRout
             <span className="material-symbols-outlined text-sm">add_a_photo</span>
             <span>Report incident</span>
           </button>
+
+          {/* Admin User Pill & Logout Button */}
+          {isAuthenticated && (
+            <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
+              <div className="hidden xl:flex flex-col text-right">
+                <span className="text-xs font-bold text-slate-800 leading-tight">
+                  {currentUser?.fullName || 'Admin Operator'}
+                </span>
+                <span className="text-[10px] text-amber-700 font-mono font-semibold leading-tight">
+                  ADMIN
+                </span>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 text-xs font-semibold border border-slate-200 hover:border-rose-200 transition-all flex items-center gap-1 cursor-pointer shadow-xs"
+                title="Sign out of administrative command session"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                <span className="hidden sm:inline">Logout</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </header>

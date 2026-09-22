@@ -6,12 +6,14 @@
  * - Webhook signature authenticity verification
  * - Idempotency & duplicate event deduplication
  * - Unknown Call ID rejection
+ * - Persistent vehicle state synchronization via vehicleRepository
  * - Sanitized responses (zero credential leakage)
  */
 
 import { getVoiceProvider } from './providers/voiceProviderFactory.js';
 import { voiceService } from './voiceService.js';
 import { normalizeStructuredResult } from './safetyClassifier.js';
+import { vehicleRepository } from '../db/vehicleRepository.js';
 
 // Valid status lifecycle enum
 export const TELEPHONY_STATUSES = [
@@ -92,7 +94,7 @@ export async function processStatusWebhook({ headers = {}, body = {}, query = {}
   const payload = authResult.event || body;
   const metadata = payload.metadata || payload.webhook_config?.metadata || body.metadata || body.webhook_config?.metadata || {};
 
-  const payloadCallId = payload.callId || metadata.internal_call_id || metadata.internalCallId || metadata.call_id || body.callId || body.internal_call_id;
+  const payloadCallId = payload.callId || payload.call_id || metadata.internal_call_id || metadata.internalCallId || metadata.call_id || body.callId || body.call_id || body.internal_call_id;
   const providerCallId = payload.providerCallId || body.job_id || body.interaction_id || body.outbound_id || body.providerCallId || body.id || payload.job_id;
   const vehicleId = payload.vehicleId || metadata.vehicle_id || metadata.vehicleId || body.vehicle_id || body.vehicleId || payload.vehicle_id;
 
@@ -161,6 +163,7 @@ export async function processStatusWebhook({ headers = {}, body = {}, query = {}
       statusCode: 200,
       body: {
         success: true,
+        idempotent: true,
         message: 'Duplicate webhook event ignored (idempotent).',
         callId: effectiveCallId,
       },
@@ -219,26 +222,36 @@ export async function processStatusWebhook({ headers = {}, body = {}, query = {}
     session.outcomeConfidence = normalized.confidence;
     session.escalationRequired = normalized.escalationRequired;
 
-    // Synchronize vehicle record if found
-    const vehicle = voiceService.findVehicle ? voiceService.findVehicle(null, session.vehicleId) : null;
-    if (vehicle) {
-      vehicle.safetyStatus = normalized.outcome;
-      vehicle.lastSafetyCheck = timestamp;
-      vehicle.activeCallId = session.callId;
-      if (normalized.outcome === 'SAFE') {
-        vehicle.isFlagged = false;
-        vehicle.flagReason = null;
-      } else {
-        vehicle.isFlagged = true;
-        vehicle.flagReason = `Safety check outcome: ${normalized.outcome}`;
+    // Persist vehicle record through vehicleRepository
+    let vehicle = null;
+    const isSafe = normalized.outcome === 'SAFE';
+    const vehicleUpdates = {
+      safetyStatus: normalized.outcome,
+      lastSafetyCheck: timestamp,
+      activeCallId: session.callId,
+      isFlagged: !isSafe,
+      flagReason: isSafe ? null : `Safety check outcome: ${normalized.outcome}`,
+    };
+
+    try {
+      const updatedVehicle = await vehicleRepository.updateVehicle(session.vehicleId, vehicleUpdates);
+      if (updatedVehicle) {
+        vehicle = updatedVehicle;
       }
-      vehicle.updatedAt = timestamp;
+    } catch (dbErr) {
+      console.error('[Webhook Handler] Vehicle persistence error on COMPLETED:', dbErr.message);
+    }
+
+    // Also update any in-memory test fleet reference
+    const memoryVehicle = voiceService.findVehicle ? voiceService.findVehicle(null, session.vehicleId) : null;
+    if (memoryVehicle) {
+      Object.assign(memoryVehicle, vehicleUpdates, { updatedAt: timestamp });
     }
 
     if (normalized.escalationRequired && voiceService.notifyEscalation) {
       voiceService.notifyEscalation({
         session,
-        vehicle,
+        vehicle: vehicle || memoryVehicle,
         outcome: normalized.outcome,
         summary: normalized.summary,
       });
@@ -261,20 +274,35 @@ export async function processStatusWebhook({ headers = {}, body = {}, query = {}
     session.outcomeConfidence = normalized.confidence;
     session.escalationRequired = true;
 
-    const vehicle = voiceService.findVehicle ? voiceService.findVehicle(null, session.vehicleId) : null;
-    if (vehicle) {
-      vehicle.safetyStatus = normalized.outcome;
-      vehicle.lastSafetyCheck = timestamp;
-      vehicle.activeCallId = session.callId;
-      vehicle.isFlagged = true;
-      vehicle.flagReason = `Safety check failed: ${reason || normalizedStatus}`;
-      vehicle.updatedAt = timestamp;
+    // Persist vehicle record through vehicleRepository
+    let vehicle = null;
+    const vehicleUpdates = {
+      safetyStatus: normalized.outcome,
+      lastSafetyCheck: timestamp,
+      activeCallId: session.callId,
+      isFlagged: true,
+      flagReason: `Safety check failed: ${reason || normalizedStatus}`,
+    };
+
+    try {
+      const updatedVehicle = await vehicleRepository.updateVehicle(session.vehicleId, vehicleUpdates);
+      if (updatedVehicle) {
+        vehicle = updatedVehicle;
+      }
+    } catch (dbErr) {
+      console.error(`[Webhook Handler] Vehicle persistence error on ${normalizedStatus}:`, dbErr.message);
+    }
+
+    // Also update any in-memory test fleet reference
+    const memoryVehicle = voiceService.findVehicle ? voiceService.findVehicle(null, session.vehicleId) : null;
+    if (memoryVehicle) {
+      Object.assign(memoryVehicle, vehicleUpdates, { updatedAt: timestamp });
     }
 
     if (voiceService.notifyEscalation) {
       voiceService.notifyEscalation({
         session,
-        vehicle,
+        vehicle: vehicle || memoryVehicle,
         outcome: normalized.outcome,
         summary: session.summary,
       });

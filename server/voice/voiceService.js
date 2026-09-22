@@ -3,24 +3,31 @@
  *
  * Manages call sessions, state transitions, vehicle safety status updates, and escalation handling.
  * Integrates with pluggable voice providers via BaseVoiceProvider contract.
+ * Backed authoritatively by VehicleRepository for persistent fleet state.
  */
 
 import { getVoiceProvider } from './providers/voiceProviderFactory.js';
 import { checkCallCooldown, recordCallTimestamp, maskPhone } from './securityGuardrails.js';
 import { normalizeStructuredResult } from './safetyClassifier.js';
+import { vehicleRepository } from '../db/vehicleRepository.js';
 
 class VoiceService {
   constructor() {
     this.sessions = [];
     this.getVehicles = () => [];
     this.escalationHooks = [];
+    this.repository = vehicleRepository;
   }
 
   /**
-   * Bind the live vehicles array accessor.
+   * Bind the live vehicles array accessor or repository reference.
    */
-  init(vehiclesGetter) {
-    this.getVehicles = typeof vehiclesGetter === 'function' ? vehiclesGetter : () => vehiclesGetter;
+  init(vehiclesGetterOrRepo) {
+    if (vehiclesGetterOrRepo && typeof vehiclesGetterOrRepo.getVehicleById === 'function') {
+      this.repository = vehiclesGetterOrRepo;
+    } else if (typeof vehiclesGetterOrRepo === 'function') {
+      this.getVehicles = vehiclesGetterOrRepo;
+    }
   }
 
   /**
@@ -46,7 +53,7 @@ class VoiceService {
   }
 
   /**
-   * Helper to find a vehicle by ID (case-insensitive) across provided array or default store.
+   * Synchronous helper to find a vehicle by ID (case-insensitive) across provided array, getter, or cache.
    */
   findVehicle(vehiclesPool, vehicleId) {
     let pool = [];
@@ -58,7 +65,33 @@ class VoiceService {
 
     if (!vehicleId) return null;
     const targetId = String(vehicleId).toLowerCase();
-    return pool.find((v) => String(v.id).toLowerCase() === targetId) || null;
+    const inPool = pool.find((v) => String(v.id).toLowerCase() === targetId);
+    if (inPool) return inPool;
+
+    // Synchronous memory cache fallback
+    const repo = this.repository || vehicleRepository;
+    if (repo && typeof repo.getCachedVehicles === 'function') {
+      return repo.getCachedVehicles().find((v) => String(v.id).toLowerCase() === targetId) || null;
+    }
+
+    return null;
+  }
+
+  /**
+   * Asynchronous authoritative vehicle lookup.
+   */
+  async getVehicle(vehicleId, pool = null) {
+    if (!vehicleId) return null;
+    const targetId = String(vehicleId).toLowerCase();
+
+    // Check pool first if explicit array provided (e.g. test isolation)
+    if (Array.isArray(pool)) {
+      const inPool = pool.find((v) => String(v.id).toLowerCase() === targetId);
+      if (inPool) return inPool;
+    }
+
+    const repo = this.repository || vehicleRepository;
+    return await repo.getVehicleById(targetId);
   }
 
   /**
@@ -74,15 +107,16 @@ class VoiceService {
 
   /**
    * Manually flag or unflag a vehicle for safety check.
+   * Persists changes through vehicleRepository.
    * Supports both (vehicles, vehicleId, reason, flagged) and ({ vehicleId, flagged, reason })
    */
-  flagVehicle(arg1, arg2, arg3, arg4) {
+  async flagVehicle(arg1, arg2, arg3, arg4) {
     let pool = null;
     let vehicleId = null;
     let reason = null;
     let isFlagged = true;
 
-    if (Array.isArray(arg1)) {
+    if (Array.isArray(arg1) || (arg1 === null && arg2 !== undefined)) {
       pool = arg1;
       vehicleId = arg2;
       reason = arg3;
@@ -98,7 +132,15 @@ class VoiceService {
       isFlagged = arg3 !== undefined ? Boolean(arg3) : true;
     }
 
-    const vehicle = this.findVehicle(pool, vehicleId);
+    let vehicle = null;
+    if (Array.isArray(pool)) {
+      vehicle = pool.find((v) => String(v.id).toLowerCase() === String(vehicleId).toLowerCase());
+    }
+    if (!vehicle) {
+      const repo = this.repository || vehicleRepository;
+      vehicle = await repo.getVehicleById(vehicleId);
+    }
+
     if (!vehicle) {
       return {
         success: false,
@@ -106,39 +148,59 @@ class VoiceService {
       };
     }
 
-    vehicle.isFlagged = isFlagged;
-    vehicle.flagReason = isFlagged ? (reason || 'Manual operator flag: Safety check requested') : null;
-
+    let newSafetyStatus = vehicle.safetyStatus;
     if (isFlagged) {
       if (vehicle.safetyStatus === 'NOT_CHECKED' || !vehicle.safetyStatus) {
-        vehicle.safetyStatus = 'PENDING_CALL';
+        newSafetyStatus = 'PENDING_CALL';
       }
     } else {
       if (vehicle.safetyStatus === 'PENDING_CALL') {
-        vehicle.safetyStatus = 'NOT_CHECKED';
+        newSafetyStatus = 'NOT_CHECKED';
       }
     }
 
-    vehicle.updatedAt = new Date().toISOString();
+    const flagReason = isFlagged ? (reason || 'Manual operator flag: Safety check requested') : null;
+    const repo = this.repository || vehicleRepository;
+    const updated = await repo.updateVehicle(vehicle.id, {
+      isFlagged,
+      flagReason,
+      safetyStatus: newSafetyStatus,
+    });
+
+    const resultVehicle = updated || {
+      ...vehicle,
+      isFlagged,
+      flagReason,
+      safetyStatus: newSafetyStatus,
+    };
+
+    // Mutate pool object if passed as array (for in-memory test backward compatibility)
+    if (Array.isArray(pool)) {
+      const memObj = pool.find((v) => String(v.id).toLowerCase() === String(vehicle.id).toLowerCase());
+      if (memObj) {
+        Object.assign(memObj, resultVehicle);
+      }
+    }
 
     return {
       success: true,
-      vehicle,
+      vehicle: resultVehicle,
       message: isFlagged
-        ? `Vehicle ${vehicle.id} flagged for safety check (${vehicle.flagReason}).`
-        : `Vehicle ${vehicle.id} unflagged.`,
+        ? `Vehicle ${resultVehicle.id} flagged for safety check (${resultVehicle.flagReason}).`
+        : `Vehicle ${resultVehicle.id} unflagged.`,
     };
   }
 
   /**
    * Trigger a voice safety call for a vehicle via the active voice provider.
+   * Persists active call state and results through vehicleRepository.
    * Supports both (vehicles, options) and (options)
    */
   async triggerSafetyCall(arg1, arg2) {
     let pool = null;
     let opts = {};
 
-    if (Array.isArray(arg1)) {
+    if (Array.isArray(arg1) || (arg1 === null && typeof arg2 === 'object')) {
       pool = arg1;
       opts = arg2 || {};
     } else {
@@ -162,7 +224,15 @@ class VoiceService {
     const outcomeToSimulate = simulatedOutcome || scenario || 'SAFE';
     const driverUtterance = customResponse || customDriverText || null;
 
-    const vehicle = this.findVehicle(pool, vehicleId);
+    let vehicle = null;
+    if (Array.isArray(pool)) {
+      vehicle = pool.find((v) => String(v.id).toLowerCase() === String(vehicleId).toLowerCase());
+    }
+    if (!vehicle) {
+      const repo = this.repository || vehicleRepository;
+      vehicle = await repo.getVehicleById(vehicleId);
+    }
+
     if (!vehicle) {
       return {
         success: false,
@@ -185,9 +255,19 @@ class VoiceService {
     const nextCallNum = this.sessions.length + 101;
     const callId = `CALL-NER-${String(nextCallNum).padStart(4, '0')}`;
 
-    // Mark vehicle in-call state
+    // Immediately persist vehicle in-call state
+    const repo = this.repository || vehicleRepository;
+    await repo.updateVehicle(vehicle.id, {
+      activeCallId: callId,
+      safetyStatus: 'PENDING_CALL',
+      isFlagged: true,
+      flagReason: flagReason || vehicle.flagReason || 'Scheduled Driver Safety Check',
+    });
+
+    // Mark local reference
     vehicle.activeCallId = callId;
     vehicle.safetyStatus = 'PENDING_CALL';
+    vehicle.isFlagged = true;
 
     // Session Language determination
     const language = preferredLanguage || vehicle.preferredLanguage || 'en';
@@ -204,7 +284,7 @@ class VoiceService {
       preferredLanguage: language,
     };
 
-    // Execute provider outbound call
+    // Execute provider outbound call with authoritative vehicle info
     const callResult = await provider.initiateCall({
       session: tempSession,
       vehicle,
@@ -256,29 +336,38 @@ class VoiceService {
       driverPhone: vehicle.driverPhone || '+91-98640-XXXXX',
     };
 
-    // Update vehicle permanent state
+    // Update vehicle persistent state
     if (isCompleted) {
-      vehicle.safetyStatus = normalizedResult.outcome;
-      vehicle.lastSafetyCheck = completedTime;
-      vehicle.activeCallId = callId;
-
-      // Flag state management
-      if (normalizedResult.outcome === 'SAFE') {
-        vehicle.isFlagged = false;
-        vehicle.flagReason = null;
-      } else {
-        vehicle.isFlagged = true;
-        if (!vehicle.flagReason) {
-          vehicle.flagReason = `Safety check outcome: ${normalizedResult.outcome}`;
-        }
+      const isSafe = normalizedResult.outcome === 'SAFE';
+      const updates = {
+        safetyStatus: normalizedResult.outcome,
+        lastSafetyCheck: completedTime,
+        activeCallId: callId,
+        isFlagged: !isSafe,
+        flagReason: isSafe ? null : (vehicle.flagReason || `Safety check outcome: ${normalizedResult.outcome}`),
+      };
+      const updatedVeh = await repo.updateVehicle(vehicle.id, updates);
+      if (updatedVeh) {
+        Object.assign(vehicle, updatedVeh);
       }
     } else {
-      vehicle.safetyStatus = 'PENDING_CALL';
-      vehicle.activeCallId = callId;
-      vehicle.isFlagged = true;
+      const updates = {
+        safetyStatus: 'PENDING_CALL',
+        activeCallId: callId,
+        isFlagged: true,
+      };
+      const updatedVeh = await repo.updateVehicle(vehicle.id, updates);
+      if (updatedVeh) {
+        Object.assign(vehicle, updatedVeh);
+      }
     }
 
-    vehicle.updatedAt = new Date().toISOString();
+    if (Array.isArray(pool)) {
+      const memObj = pool.find((v) => String(v.id).toLowerCase() === String(vehicle.id).toLowerCase());
+      if (memObj) {
+        Object.assign(memObj, vehicle);
+      }
+    }
 
     // Store in session ledger
     this.sessions.unshift(session);
@@ -344,17 +433,22 @@ class VoiceService {
 
   /**
    * Resolve an operator escalation for a call session.
+   * Persists cleared flag state through vehicleRepository.
    * Supports both (vehicles, callId, notes) and (callId, notes)
    */
-  resolveEscalation(arg1, arg2, arg3) {
+  async resolveEscalation(arg1, arg2, arg3) {
     let pool = null;
     let callId = null;
     let notes = '';
 
-    if (Array.isArray(arg1)) {
+    if (Array.isArray(arg1) || (arg1 === null && typeof arg2 === 'string')) {
       pool = arg1;
       callId = arg2;
       notes = typeof arg3 === 'string' ? arg3 : (arg3?.notes || 'Escalation resolved by operator.');
+    } else if (typeof arg1 === 'object' && arg1 !== null) {
+      callId = arg1.callId;
+      notes = arg1.notes || 'Escalation resolved by operator.';
+      pool = arg1.vehicles || null;
     } else {
       callId = arg1;
       notes = typeof arg2 === 'string' ? arg2 : (arg2?.notes || 'Escalation resolved by operator.');
@@ -375,12 +469,30 @@ class VoiceService {
     session.resolutionNotes = notes;
     session.resolvedAt = new Date().toISOString();
 
-    // Update associated vehicle if present
-    const vehicle = this.findVehicle(pool, session.vehicleId);
+    let vehicle = null;
+    if (Array.isArray(pool)) {
+      vehicle = pool.find((v) => String(v.id).toLowerCase() === String(session.vehicleId).toLowerCase());
+    }
+    if (!vehicle) {
+      const repo = this.repository || vehicleRepository;
+      vehicle = await repo.getVehicleById(session.vehicleId);
+    }
+
     if (vehicle) {
-      vehicle.isFlagged = false;
-      vehicle.flagReason = null;
-      vehicle.updatedAt = new Date().toISOString();
+      const repo = this.repository || vehicleRepository;
+      const updatedVeh = await repo.updateVehicle(vehicle.id, {
+        isFlagged: false,
+        flagReason: null,
+      });
+      if (updatedVeh) {
+        Object.assign(vehicle, updatedVeh);
+      }
+      if (Array.isArray(pool)) {
+        const memObj = pool.find((v) => String(v.id).toLowerCase() === String(vehicle.id).toLowerCase());
+        if (memObj) {
+          Object.assign(memObj, vehicle);
+        }
+      }
     }
 
     return {

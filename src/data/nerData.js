@@ -392,20 +392,121 @@ export const INITIAL_WEATHER = [
   { corridorId: 'COR-08', location: 'Siliguri-Gangtok', rainfallMm: 55.4, visibilityM: 1800, condition: 'Valley Mist & Rain', landslideRisk: 'MODERATE' },
 ];
 
+export const INITIAL_NER_DEPLOYMENTS = [
+  {
+    id: 'DEP-NER-101',
+    vehicleId: 'VEH-NER-101',
+    origin: 'Guwahati',
+    destination: 'Silchar',
+    assignedCorridor: 'NH-6',
+    status: 'ACTIVE',
+    cargo: 'Vaccines, Blood Plasma & Insulin',
+    priority: 'EMERGENCY_CRITICAL',
+    startedAt: '2026-09-21T06:00:00.000Z',
+    completedAt: null,
+  },
+  {
+    id: 'DEP-NER-204',
+    vehicleId: 'VEH-NER-204',
+    origin: 'Guwahati',
+    destination: 'Shillong',
+    assignedCorridor: 'GS Road / NH-27',
+    status: 'ACTIVE',
+    cargo: 'Rice & Fortified Grains',
+    priority: 'HIGH',
+    startedAt: '2026-09-21T07:30:00.000Z',
+    completedAt: null,
+  },
+  {
+    id: 'DEP-NER-309',
+    vehicleId: 'VEH-NER-309',
+    origin: 'Guwahati',
+    destination: 'Agartala',
+    assignedCorridor: 'NH-6 / NH-8',
+    status: 'DELAYED',
+    cargo: 'High-Speed Diesel (HSD) & Petrol',
+    priority: 'HIGH',
+    startedAt: '2026-09-21T04:00:00.000Z',
+    completedAt: null,
+  },
+  {
+    id: 'DEP-NER-412',
+    vehicleId: 'VEH-NER-412',
+    origin: 'Silchar',
+    destination: 'Imphal',
+    assignedCorridor: 'NH-37 (Via Jiribam Transshipment)',
+    status: 'ACTIVE',
+    cargo: 'Liquid Medical Oxygen (LMO)',
+    priority: 'EMERGENCY_CRITICAL',
+    startedAt: '2026-09-21T05:15:00.000Z',
+    completedAt: null,
+  },
+  {
+    id: 'DEP-NER-515',
+    vehicleId: 'VEH-NER-515',
+    origin: 'Guwahati',
+    destination: 'Kohima',
+    assignedCorridor: 'NH-27 / NH-29',
+    status: 'ACTIVE',
+    cargo: 'Dry Rations, Tarpaulins & Water Purification Kits',
+    priority: 'HIGH',
+    startedAt: '2026-09-21T08:00:00.000Z',
+    completedAt: null,
+  },
+  {
+    id: 'DEP-NER-602',
+    vehicleId: 'VEH-NER-602',
+    origin: 'Silchar',
+    destination: 'Aizawl',
+    assignedCorridor: 'NH-306 / NH-54',
+    status: 'ACTIVE',
+    cargo: 'Baby Food & Pharmaceutical Supplies',
+    priority: 'HIGH',
+    startedAt: '2026-09-21T06:45:00.000Z',
+    completedAt: null,
+  },
+  {
+    id: 'DEP-NER-708',
+    vehicleId: 'VEH-NER-708',
+    origin: 'Tezpur',
+    destination: 'Itanagar',
+    assignedCorridor: 'NH-15 / NH-415',
+    status: 'ACTIVE',
+    cargo: 'Heavy Engineering Spares & Bridge Panels',
+    priority: 'HIGH',
+    startedAt: '2026-09-21T07:00:00.000Z',
+    completedAt: null,
+  },
+  {
+    id: 'DEP-NER-819',
+    vehicleId: 'VEH-NER-819',
+    origin: 'Siliguri',
+    destination: 'Gangtok',
+    assignedCorridor: 'NH-10 (Sevoke-Teesta Section)',
+    status: 'ACTIVE',
+    cargo: 'Emergency Hospital Oxygen Cylinders',
+    priority: 'EMERGENCY_CRITICAL',
+    startedAt: '2026-09-21T05:30:00.000Z',
+    completedAt: null,
+  },
+];
+
 /**
  * Computes live NER Logistics KPIs dynamically from current state
  */
-export function calculateKPIs(incidents = [], alerts = [], vehicles = [], corridors = NER_CORRIDORS, districts = NER_DISTRICTS) {
+export function calculateKPIs(incidents = [], alerts = [], vehicles = [], corridors = NER_CORRIDORS, districts = NER_DISTRICTS, deployments = []) {
   // District accessibility calculation: average accessibility across all monitored districts
   const totalScore = districts.reduce((acc, d) => acc + (d.accessibilityScore || 75), 0);
   const districtAccessibility = districts.length > 0 ? (totalScore / districts.length).toFixed(1) : '78.5';
 
   const districtsMonitored = districts.length;
   const activeAlerts = alerts.length;
-  const vehiclesInTransit = vehicles.filter((v) => {
-    const s = String(v.status || '').toUpperCase().replace(/\s+/g, '_');
-    return s === 'IN_TRANSIT';
-  }).length;
+
+  const activeDepsCount = deployments.length > 0
+    ? deployments.filter((d) => ['ACTIVE', 'DELAYED', 'PLANNED'].includes(d.status)).length
+    : vehicles.filter((v) => v.hasActiveDeployment || ['IN_TRANSIT', 'ACTIVE', 'DELAYED', 'REROUTED'].includes(String(v.status || '').toUpperCase())).length;
+
+  const vehiclesInTransit = activeDepsCount || vehicles.length;
 
   // Average delay across all corridors
   const totalDelay = corridors.reduce((acc, c) => acc + (c.delayMinutes || 0), 0);
@@ -419,5 +520,7 @@ export function calculateKPIs(incidents = [], alerts = [], vehicles = [], corrid
     averageCorridorDelay: `${averageCorridorDelay} mins`,
     totalCorridorsTracked: corridors.length,
     criticalBottlenecks: incidents.filter((i) => i.severity === 'CRITICAL' || i.severity === 'HIGH').length,
+    totalVehicles: vehicles.length,
+    activeDeployments: activeDepsCount,
   };
 }

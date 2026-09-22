@@ -2,7 +2,10 @@ import React from 'react';
 import { useApp } from '../context/AppContext';
 
 export default function CommandCenterKPIs() {
-  const { kpis, incidents, vehicles } = useApp();
+  const { kpis, incidents, vehicles, activeDeployments, availableVehicles } = useApp();
+
+  const activeDepsCount = activeDeployments ? activeDeployments.length : (kpis.vehiclesInTransit || 0);
+  const availCount = availableVehicles ? availableVehicles.length : vehicles.length;
 
   const cards = [
     {
@@ -42,11 +45,11 @@ export default function CommandCenterKPIs() {
     },
     {
       id: 'kpi-vehicles',
-      code: 'Vehicles in transit',
-      label: 'Active supply fleet units',
-      value: kpis.vehiclesInTransit || 4,
-      subtext: `${vehicles.length} total vehicles registered`,
-      badge: 'Active Transit',
+      code: 'Fleet in transit',
+      label: 'Active corridor journeys',
+      value: activeDepsCount,
+      subtext: `${availCount} available • ${vehicles.length} registered`,
+      badge: `${activeDepsCount} Deployed`,
       badgeClass: 'bg-indigo-50 text-indigo-700 border-indigo-200',
       icon: 'local_shipping',
       accentColor: 'border-l-4 border-l-indigo-500',
