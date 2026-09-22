@@ -6,6 +6,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { voiceService } from './voice/voiceService.js';
 import { validateFlagRequest, validateTriggerRequest } from './voice/securityGuardrails.js';
+import { processStatusWebhook } from './voice/webhookHandler.js';
 
 dotenv.config();
 
@@ -851,6 +852,44 @@ app.post('/api/voice/simulate-call', async (req, res) => {
       vehicle: result.vehicle,
     },
   });
+});
+
+// Telephony Provider Webhook Status Callback
+app.post('/api/voice/webhooks/status', async (req, res) => {
+  try {
+    const result = await processStatusWebhook({
+      headers: req.headers,
+      body: req.body,
+      query: req.query,
+    });
+    return res.status(result.statusCode).json(result.body);
+  } catch (err) {
+    console.error('[Voice Webhook] Status Handler Error:', err);
+    return res.status(500).json({ success: false, error: 'Internal webhook processing error.' });
+  }
+});
+
+// Telephony Provider Inbound Speech Turn Webhook
+app.post('/api/voice/webhooks/speech', async (req, res) => {
+  try {
+    const { callId, speechText, detectedLanguage = 'en' } = req.body || {};
+    if (!callId || !speechText) {
+      return res.status(400).json({ success: false, error: 'callId and speechText are required.' });
+    }
+    const session = voiceService.getSessionById(callId);
+    if (!session) {
+      return res.status(404).json({ success: false, error: `Call session '${callId}' not found.` });
+    }
+    return res.json({
+      success: true,
+      message: 'Inbound speech recognized.',
+      callId,
+      detectedLanguage,
+    });
+  } catch (err) {
+    console.error('[Voice Webhook] Speech Handler Error:', err);
+    return res.status(500).json({ success: false, error: 'Internal webhook speech processing error.' });
+  }
 });
 
 // ==========================================

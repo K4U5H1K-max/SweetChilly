@@ -1,10 +1,13 @@
 /**
- * Track 4 Voice Service Orchestrator
+ * Project Brahmaputra — Track 4 Voice Service Orchestrator
+ *
  * Manages call sessions, state transitions, vehicle safety status updates, and escalation handling.
+ * Integrates with pluggable voice providers via BaseVoiceProvider contract.
  */
 
-import { executeMockCall } from './mockVoiceProvider.js';
+import { getVoiceProvider } from './providers/voiceProviderFactory.js';
 import { checkCallCooldown, recordCallTimestamp, maskPhone } from './securityGuardrails.js';
+import { normalizeStructuredResult } from './safetyClassifier.js';
 
 class VoiceService {
   constructor() {
@@ -105,7 +108,7 @@ class VoiceService {
   }
 
   /**
-   * Trigger a voice safety call for a vehicle.
+   * Trigger a voice safety call for a vehicle via the active voice provider.
    * Supports both (vehicles, options) and (options)
    */
   async triggerSafetyCall(arg1, arg2) {
@@ -128,6 +131,8 @@ class VoiceService {
       simulatedOutcome,
       customDriverText,
       customResponse,
+      preferredLanguage,
+      providerName,
       forceOverride = false,
     } = opts;
 
@@ -161,32 +166,67 @@ class VoiceService {
     vehicle.activeCallId = callId;
     vehicle.safetyStatus = 'PENDING_CALL';
 
-    // Execute mock voice dialogue and structured classification
-    const callResult = await executeMockCall({
+    // Session Language determination
+    const language = preferredLanguage || vehicle.preferredLanguage || 'en';
+
+    // Resolve active voice provider via Provider Factory abstraction
+    const provider = getVoiceProvider(providerName);
+
+    // Initial temporary session for provider context
+    const tempSession = {
+      callId,
+      vehicleId: vehicle.id,
+      triggerSource,
+      flagReason: flagReason || vehicle.flagReason || 'Scheduled Driver Safety Check',
+      preferredLanguage: language,
+    };
+
+    // Execute provider outbound call
+    const callResult = await provider.initiateCall({
+      session: tempSession,
       vehicle,
       scenario: outcomeToSimulate,
+      simulatedOutcome: outcomeToSimulate,
       customDriverText: driverUtterance,
       flagReason: flagReason || vehicle.flagReason,
+      preferredLanguage: language,
     });
 
     const completedTime = new Date().toISOString();
     recordCallTimestamp(vehicle.id);
 
-    // Construct session record
+    // Normalize classification result (guarantees 5-tuple boolean flags)
+    const normalizedResult = normalizeStructuredResult(callResult, outcomeToSimulate);
+
+    // Construct persistent session record
+    const isCompleted = (callResult.status || callResult.callStatus) === 'COMPLETED';
     const session = {
       callId,
       vehicleId: vehicle.id,
+      providerCallId: callResult.providerCallId || null,
+      provider: provider.name,
       triggerSource,
       flagReason: flagReason || vehicle.flagReason || 'Scheduled Driver Safety Check',
-      status: callResult.callStatus || 'COMPLETED',
+      status: callResult.status || callResult.callStatus || (isCompleted ? 'COMPLETED' : 'QUEUED'),
+      isDryRun: Boolean(callResult.isDryRun),
       startedAt: startTime,
-      completedAt: completedTime,
-      dialogueHistory: callResult.dialogueHistory,
-      transcript: callResult.transcript,
-      structuredOutcome: callResult.structuredOutcome,
-      outcomeConfidence: callResult.outcomeConfidence,
-      summary: callResult.summary,
-      escalationRequired: callResult.escalationRequired,
+      completedAt: isCompleted ? completedTime : null,
+      dialogueHistory: callResult.dialogueHistory || [],
+      transcript: callResult.transcript || '',
+      preferredLanguage: language,
+      detectedLanguage: callResult.detectedLanguage || language,
+      // Normalized 5-tuple + outcome schema
+      driverSafe: isCompleted ? normalizedResult.driverSafe : undefined,
+      vehicleOperational: isCompleted ? normalizedResult.vehicleOperational : undefined,
+      roadPassable: isCompleted ? normalizedResult.roadPassable : undefined,
+      assistanceRequired: isCompleted ? normalizedResult.assistanceRequired : undefined,
+      outcome: isCompleted ? normalizedResult.outcome : 'PENDING_CALL',
+      confidence: isCompleted ? normalizedResult.confidence : 0.90,
+      summary: isCompleted ? normalizedResult.summary : (callResult.transcript || 'Safety check initiated.'),
+      // Backward-compatible Phase 1 fields
+      structuredOutcome: isCompleted ? normalizedResult.outcome : 'PENDING_CALL',
+      outcomeConfidence: isCompleted ? normalizedResult.confidence : 0.90,
+      escalationRequired: isCompleted ? normalizedResult.escalationRequired : false,
       escalationResolved: false,
       escalationResolvedBy: null,
       resolutionNotes: null,
@@ -194,19 +234,25 @@ class VoiceService {
     };
 
     // Update vehicle permanent state
-    vehicle.safetyStatus = callResult.structuredOutcome;
-    vehicle.lastSafetyCheck = completedTime;
-    vehicle.activeCallId = callId;
+    if (isCompleted) {
+      vehicle.safetyStatus = normalizedResult.outcome;
+      vehicle.lastSafetyCheck = completedTime;
+      vehicle.activeCallId = callId;
 
-    // Flag state management
-    if (callResult.structuredOutcome === 'SAFE') {
-      vehicle.isFlagged = false;
-      vehicle.flagReason = null;
-    } else {
-      vehicle.isFlagged = true;
-      if (!vehicle.flagReason) {
-        vehicle.flagReason = `Safety check outcome: ${callResult.structuredOutcome}`;
+      // Flag state management
+      if (normalizedResult.outcome === 'SAFE') {
+        vehicle.isFlagged = false;
+        vehicle.flagReason = null;
+      } else {
+        vehicle.isFlagged = true;
+        if (!vehicle.flagReason) {
+          vehicle.flagReason = `Safety check outcome: ${normalizedResult.outcome}`;
+        }
       }
+    } else {
+      vehicle.safetyStatus = 'PENDING_CALL';
+      vehicle.activeCallId = callId;
+      vehicle.isFlagged = true;
     }
 
     vehicle.updatedAt = new Date().toISOString();
@@ -234,12 +280,42 @@ class VoiceService {
   }
 
   /**
-   * Get a single session by callId.
+   * Get internal raw session reference by callId or providerCallId (for internal service/webhook updates).
+   */
+  getRawSessionById(callId) {
+    if (!callId) return null;
+    const targetId = String(callId).toLowerCase();
+    return (
+      this.sessions.find(
+        (s) =>
+          String(s.callId).toLowerCase() === targetId ||
+          (s.providerCallId && String(s.providerCallId).toLowerCase() === targetId)
+      ) || null
+    );
+  }
+
+  /**
+   * Get raw session by either internal callId, providerCallId, or vehicleId.
+   */
+  getRawSessionByAnyId(identifier) {
+    if (!identifier) return null;
+    const target = String(identifier).toLowerCase();
+    return (
+      this.sessions.find(
+        (s) =>
+          String(s.callId).toLowerCase() === target ||
+          (s.providerCallId && String(s.providerCallId).toLowerCase() === target) ||
+          String(s.vehicleId).toLowerCase() === target
+      ) || null
+    );
+  }
+
+  /**
+   * Get a single session by callId (sanitized for client consumption).
    */
   getSessionById(callId) {
     if (!callId) return null;
-    const targetId = String(callId).toLowerCase();
-    const session = this.sessions.find((s) => String(s.callId).toLowerCase() === targetId);
+    const session = this.getRawSessionById(callId);
     return session ? this.sanitizeSession(session) : null;
   }
 

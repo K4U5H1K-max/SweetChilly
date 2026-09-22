@@ -7,10 +7,12 @@ console.log('=== [PROJECT BRAHMAPUTRA — INTEGRATION & REGRESSION VERIFICATION]
 // Let's verify through node test against all module endpoints and test Express handlers
 import express from 'express';
 import { voiceService } from '../server/voice/voiceService.js';
-import { validateFlagRequest, validateTriggerRequest } from '../server/voice/securityGuardrails.js';
+import { validateFlagRequest, validateTriggerRequest, resetCooldown } from '../server/voice/securityGuardrails.js';
 
 const app = express();
 app.use(express.json());
+
+resetCooldown();
 
 let testVehicles = [
   {
@@ -96,7 +98,7 @@ const server = app.listen(0, async () => {
     const trigResp = await fetch(`${baseUrl}/api/voice/calls/trigger`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ vehicleId: 'VEH-NER-101', simulatedOutcome: 'BREAKDOWN' }),
+      body: JSON.stringify({ vehicleId: 'VEH-NER-101', simulatedOutcome: 'BREAKDOWN', forceOverride: true }),
     });
     const trigData = await trigResp.json();
     assert.strictEqual(trigResp.status, 201);
