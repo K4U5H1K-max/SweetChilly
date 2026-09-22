@@ -48,11 +48,14 @@ export default function VehicleManager({
   const [status, setStatus] = useState('In Transit');
   const [priority, setPriority] = useState('HIGH');
   const [driverName, setDriverName] = useState('');
+  const [driverPhone, setDriverPhone] = useState('+91-98640-12345');
   const [latitude, setLatitude] = useState('26.1445');
   const [longitude, setLongitude] = useState('91.7362');
 
   // Edit / Telemetry Update State
   const [editStatus, setEditStatus] = useState('IN_TRANSIT');
+  const [editDriverName, setEditDriverName] = useState('');
+  const [editDriverPhone, setEditDriverPhone] = useState('');
   const [editLat, setEditLat] = useState('');
   const [editLng, setEditLng] = useState('');
   const [editDelay, setEditDelay] = useState('0');
@@ -68,6 +71,8 @@ export default function VehicleManager({
   React.useEffect(() => {
     if (targetVehicle) {
       setEditStatus(targetVehicle.status || 'IN_TRANSIT');
+      setEditDriverName(targetVehicle.driverName || 'Driver');
+      setEditDriverPhone(targetVehicle.driverPhone || '+91-98640-12345');
       setEditLat(targetVehicle.currentPos?.lat?.toFixed(4) || '25.5000');
       setEditLng(targetVehicle.currentPos?.lng?.toFixed(4) || '92.0000');
       setEditDelay(String(targetVehicle.delayEstMinutes || 0));
@@ -192,7 +197,7 @@ export default function VehicleManager({
         status,
         priority,
         driverName: driverName.trim() || 'Authorized Operator',
-        driverPhone: '+91-98640-XXXXX',
+        driverPhone: driverPhone.trim() || '+91-98640-12345',
         latitude: latNum,
         longitude: lngNum,
       };
@@ -247,6 +252,8 @@ export default function VehicleManager({
 
     try {
       const updates = {
+        driverName: editDriverName.trim() || targetVehicle.driverName || 'Driver',
+        driverPhone: editDriverPhone.trim() || targetVehicle.driverPhone || '+91-98640-12345',
         status: editStatus,
         currentPos: { lat: latNum, lng: lngNum },
         latitude: latNum,
@@ -255,10 +262,11 @@ export default function VehicleManager({
         delayEstMinutes: Number(editDelay) || 0,
       };
 
-      await api.updateVehicle(targetVehicle.id, updates);
-      updateVehicle(targetVehicle.id, updates);
+      const response = await api.updateVehicle(targetVehicle.id, updates);
+      const updatedVehicle = response.data || { ...targetVehicle, ...updates };
+      updateVehicle(targetVehicle.id, updatedVehicle);
 
-      setSuccessMessage(`Telemetry updated for ${targetVehicle.id}.`);
+      setSuccessMessage(`Vehicle details & telemetry updated for ${targetVehicle.id}.`);
       setSubmitting(false);
 
       setTimeout(() => {
@@ -267,7 +275,7 @@ export default function VehicleManager({
       }, 900);
     } catch (err) {
       console.error('[Vehicle Manager] Update failed:', err);
-      setErrorMessage(err.message || 'Failed to update vehicle telemetry.');
+      setErrorMessage(err.message || 'Failed to update vehicle details.');
       setSubmitting(false);
     }
   };
@@ -421,6 +429,49 @@ export default function VehicleManager({
                 </div>
               </div>
 
+              {/* Registered Driver Information Section */}
+              <div className="border border-slate-200 bg-slate-50/80 rounded-lg p-3.5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <span>👤</span>
+                    <span>Registered Driver Information</span>
+                  </span>
+                  <span className="text-[10px] text-blue-700 font-semibold bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">
+                    Track 4 Voice Target
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Driver Name
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. R. Debbarma"
+                      value={editDriverName}
+                      onChange={(e) => setEditDriverName(e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-xs font-medium text-slate-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:outline-hidden"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Registered Driver Phone
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. +91XXXXXXXXXX"
+                      value={editDriverPhone}
+                      onChange={(e) => setEditDriverPhone(e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-xs font-mono text-slate-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:outline-hidden"
+                    />
+                    <p className="text-[10px] text-slate-500 mt-1">
+                      Destination number for Track 4 automated driver safety calls.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               {/* Quick Simulate Movement Step */}
               <div className="border border-blue-200 bg-blue-50/50 rounded-lg p-3.5 flex items-center justify-between gap-3">
                 <div className="text-xs">
@@ -451,7 +502,7 @@ export default function VehicleManager({
                   disabled={submitting}
                   className="px-5 py-2 bg-slate-900 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-50"
                 >
-                  {submitting ? 'Updating...' : 'Save telemetry'}
+                  {submitting ? 'Saving...' : 'Save Vehicle'}
                 </button>
               </div>
             </form>
@@ -610,6 +661,34 @@ export default function VehicleManager({
                     <option value="EMERGENCY_CRITICAL">Emergency critical</option>
                     <option value="MEDIUM">Medium standard</option>
                   </select>
+                </div>
+              </div>
+
+              {/* Row 5: Driver Information */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Driver Name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. R. Debbarma"
+                    value={driverName}
+                    onChange={(e) => setDriverName(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-xs font-medium text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:outline-hidden"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Registered Driver Phone
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. +919864012345 or 9864012345"
+                    value={driverPhone}
+                    onChange={(e) => setDriverPhone(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-xs font-mono text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:outline-hidden"
+                  />
                 </div>
               </div>
 

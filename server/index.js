@@ -5,7 +5,7 @@ import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { voiceService } from './voice/voiceService.js';
-import { validateFlagRequest, validateTriggerRequest } from './voice/securityGuardrails.js';
+import { validateFlagRequest, validateTriggerRequest, validateAndNormalizePhone, maskPhone } from './voice/securityGuardrails.js';
 import { processStatusWebhook } from './voice/webhookHandler.js';
 
 dotenv.config();
@@ -682,6 +682,16 @@ app.get('/api/vehicles', (req, res) => {
 
 app.post('/api/vehicles', (req, res) => {
   const v = req.body;
+
+  let driverPhone = v.driverPhone || '+91-98765-43210';
+  if (v.driverPhone) {
+    const phoneVal = validateAndNormalizePhone(v.driverPhone);
+    if (!phoneVal.valid) {
+      return res.status(400).json({ success: false, message: phoneVal.error });
+    }
+    driverPhone = phoneVal.phone;
+  }
+
   const newVeh = {
     id: v.id || `VEH-NER-${Date.now().toString(36).toUpperCase()}`,
     regNumber: v.regNumber || 'AS-01-XX-0000',
@@ -698,7 +708,7 @@ app.post('/api/vehicles', (req, res) => {
     delayEstMinutes: Number(v.delayEstMinutes) || 0,
     priority: v.priority || 'MEDIUM',
     driverName: v.driverName || 'Driver',
-    driverPhone: v.driverPhone || '+91-98765-43210',
+    driverPhone: driverPhone,
     isFlagged: Boolean(v.isFlagged),
     flagReason: v.flagReason || null,
     safetyStatus: v.safetyStatus || 'NOT_CHECKED',
@@ -706,6 +716,7 @@ app.post('/api/vehicles', (req, res) => {
     activeCallId: v.activeCallId || null,
   };
   vehicles.push(newVeh);
+  console.log(`[Fleet Management] New vehicle ${newVeh.id} registered (Driver: ${newVeh.driverName}, Phone: ${maskPhone(newVeh.driverPhone)})`);
   res.status(201).json({ success: true, data: newVeh });
 });
 
@@ -715,7 +726,23 @@ app.put('/api/vehicles/:id', (req, res) => {
   if (idx === -1) {
     return res.status(404).json({ success: false, message: `Vehicle ${id} not found.` });
   }
-  vehicles[idx] = { ...vehicles[idx], ...req.body };
+
+  const updates = { ...req.body };
+  if (updates.driverPhone !== undefined) {
+    const phoneVal = validateAndNormalizePhone(updates.driverPhone);
+    if (!phoneVal.valid) {
+      return res.status(400).json({ success: false, message: phoneVal.error });
+    }
+    updates.driverPhone = phoneVal.phone;
+  }
+
+  vehicles[idx] = {
+    ...vehicles[idx],
+    ...updates,
+    updatedAt: new Date().toISOString(),
+  };
+
+  console.log(`[Fleet Management] Vehicle ${id} updated (Driver: ${vehicles[idx].driverName}, Phone: ${maskPhone(vehicles[idx].driverPhone)})`);
   res.json({ success: true, data: vehicles[idx] });
 });
 

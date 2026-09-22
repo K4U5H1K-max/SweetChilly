@@ -8,7 +8,10 @@ const vehicleCallCooldowns = new Map();
 
 /**
  * Mask a phone number to protect driver PII in public API responses.
- * Example: "+91-98640-12345" -> "+91 98640-XXXXX"
+ * Examples:
+ * "+91-98640-12345" -> "+91-98640-XXXXX"
+ * "+919864012345"   -> "+91-98640-XXXXX"
+ * "9876543210"      -> "98765-XXXXX"
  */
 export function maskPhone(phoneNumber) {
   if (!phoneNumber || typeof phoneNumber !== 'string') {
@@ -18,9 +21,22 @@ export function maskPhone(phoneNumber) {
   if (cleaned.length <= 6) {
     return '***-***';
   }
-  // Retain country code and first 5 digits, mask remaining digits
-  return cleaned.replace(/(\+\d{1,3}[- ]?\d{5})[- ]?\d+/, '$1-XXXXX')
-    .replace(/(\d{5})\d{5}/, '$1-XXXXX');
+
+  const rawDigits = cleaned.replace(/\D/g, '');
+  if (rawDigits.length === 10) {
+    const first5 = rawDigits.slice(0, 5);
+    return cleaned.startsWith('+91') ? `+91-${first5}-XXXXX` : `${first5}-XXXXX`;
+  }
+  if (rawDigits.length === 12 && rawDigits.startsWith('91')) {
+    const first5 = rawDigits.slice(2, 7);
+    return `+91-${first5}-XXXXX`;
+  }
+  if (cleaned.startsWith('+')) {
+    const country = cleaned.match(/^\+\d{1,3}/)?.[0] || '+91';
+    const rest = cleaned.slice(country.length).replace(/\D/g, '');
+    return `${country}-${rest.slice(0, Math.min(5, Math.max(1, rest.length - 2)))}-XXXXX`;
+  }
+  return cleaned.replace(/(\d{5})\d+/, '$1-XXXXX');
 }
 
 /**
@@ -115,3 +131,67 @@ export function validateTriggerRequest(body) {
 
   return { valid: true };
 }
+
+/**
+ * Normalizes and validates an Indian or international phone number into E.164 format (+91XXXXXXXXXX).
+ * @param {string} phoneNumber
+ * @returns {{ valid: boolean, phone?: string, error?: string }}
+ */
+export function validateAndNormalizePhone(phoneNumber) {
+  if (!phoneNumber || typeof phoneNumber !== 'string') {
+    return {
+      valid: false,
+      error: 'Phone number is required and must be a string.',
+    };
+  }
+
+  const trimmed = phoneNumber.trim();
+  // Strip common formatting characters: spaces, hyphens, parentheses, periods
+  const cleaned = trimmed.replace(/[\s\-\(\)\.]/g, '');
+
+  if (!cleaned) {
+    return {
+      valid: false,
+      error: 'Phone number cannot be empty.',
+    };
+  }
+
+  // 1. 10-digit Indian mobile number (starts with 6, 7, 8, or 9)
+  if (/^[6-9]\d{9}$/.test(cleaned)) {
+    return {
+      valid: true,
+      phone: `+91${cleaned}`,
+    };
+  }
+
+  // 2. 11-digit Indian number starting with 0 (e.g. 09864012345)
+  if (/^0[6-9]\d{9}$/.test(cleaned)) {
+    return {
+      valid: true,
+      phone: `+91${cleaned.slice(1)}`,
+    };
+  }
+
+  // 3. Indian number with +91 or 91 country code prefix (e.g. +919864012345 or 919864012345)
+  if (/^(\+91|91)[6-9]\d{9}$/.test(cleaned)) {
+    const digits = cleaned.replace(/^\+?91/, '');
+    return {
+      valid: true,
+      phone: `+91${digits}`,
+    };
+  }
+
+  // 4. Standard valid E.164 international format (+ followed by 7-15 digits)
+  if (/^\+[1-9]\d{6,14}$/.test(cleaned)) {
+    return {
+      valid: true,
+      phone: cleaned,
+    };
+  }
+
+  return {
+    valid: false,
+    error: `Invalid phone number '${maskPhone(trimmed)}'. Please provide a valid 10-digit Indian mobile number (e.g. 9864012345) or E.164 format (+91XXXXXXXXXX).`,
+  };
+}
+

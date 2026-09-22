@@ -10,7 +10,7 @@
     "dev:full": "concurrently -n \"SERVER,CLIENT\" -c \"blue,green\" \"node server/index.js\" \"vite\"",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node test/track4_acceptance.js && node test/voice_provider_abstraction.test.js && node test/webhook_state_machine.test.js && node test/sarvam_voice_provider.test.js && node test/api_integration.js"
+    "test": "node test/track4_acceptance.js && node test/voice_provider_abstraction.test.js && node test/webhook_state_machine.test.js && node test/sarvam_voice_provider.test.js && node test/api_integration.js && node test/vehicle_driver_phone_update.test.js"
   },
   "dependencies": {
     "cors": "^2.8.6",
