@@ -510,13 +510,20 @@ export class SarvamVoiceProvider extends BaseVoiceProvider {
     }
 
     // Extract correlated IDs: metadata.internal_call_id, job_id, interaction_id, etc.
-    const metadata = body.metadata || body.webhook_config?.metadata || {};
-    const internalCallId = metadata.internal_call_id || body.callId || body.internal_call_id;
-    const providerCallId = body.job_id || body.interaction_id || body.outbound_id || body.providerCallId || body.id;
-    const vehicleId = metadata.vehicle_id || body.vehicle_id || body.vehicleId;
+    const metadata = body.metadata || body.webhook_config?.metadata || body.data?.metadata || {};
+    const internalCallId = metadata.internal_call_id || metadata.internalCallId || metadata.call_id || body.callId || body.internal_call_id || body.data?.internal_call_id;
+    const providerCallId =
+      body.job_id ||
+      body.interaction_id ||
+      body.outbound_id ||
+      body.providerCallId ||
+      body.id ||
+      body.data?.job_id ||
+      body.call_details?.id;
+    const vehicleId = metadata.vehicle_id || metadata.vehicleId || body.vehicle_id || body.vehicleId || body.data?.vehicle_id;
 
     // Extract status and normalization data
-    let status = body.status || body.event || body.call_status;
+    let status = body.status || body.event || body.call_status || body.data?.status || body.event_type;
     if (status) {
       const s = String(status).toUpperCase();
       if (['SUCCESS', 'COMPLETED', 'ENDED', 'CALL_COMPLETED'].includes(s)) status = 'COMPLETED';
@@ -527,15 +534,52 @@ export class SarvamVoiceProvider extends BaseVoiceProvider {
       else if (['NO_ANSWER', 'UNANSWERED', 'TIMEOUT'].includes(s)) status = 'NO_ANSWER';
     }
 
+    const transcript =
+      body.transcript ||
+      body.conversation_transcript ||
+      body.call_summary ||
+      body.data?.transcript ||
+      body.call_details?.transcript;
+    const summary =
+      body.call_summary ||
+      body.summary ||
+      body.data?.summary ||
+      body.call_details?.summary;
+    const variables =
+      body.variables ||
+      body.agent_variables ||
+      body.structured_data ||
+      body.extracted_variables ||
+      body.data?.variables ||
+      body.call_details?.variables ||
+      {};
+
+    // SANITIZED structural diagnostic logging (keys, counts, and IDs only; zero PII or credentials)
+    const transcriptLength = typeof transcript === 'string' ? transcript.length : (Array.isArray(transcript) ? transcript.length : 0);
+    const sanitizedDiagnostic = {
+      eventType: body.event || body.event_type || status || 'N/A',
+      topLevelKeys: Object.keys(body),
+      dataKeys: body.data && typeof body.data === 'object' ? Object.keys(body.data) : [],
+      metadataKeys: metadata && typeof metadata === 'object' ? Object.keys(metadata) : [],
+      providerCallIdPresent: Boolean(providerCallId),
+      internalCallIdPresent: Boolean(internalCallId),
+      transcriptPresent: Boolean(transcript),
+      transcriptLength,
+      summaryPresent: Boolean(summary),
+      evaluationPresent: Boolean(body.goal_evaluated || body.call_goal_status || body.evaluation || body.outcome),
+      variableKeys: Object.keys(variables),
+    };
+    console.log(`[SarvamWebhook] Event received:\n${JSON.stringify(sanitizedDiagnostic, null, 2)}`);
+
     const event = {
       ...body,
       callId: internalCallId,
       providerCallId,
       vehicleId,
       status: status || body.status,
-      transcript: body.transcript || body.conversation_transcript || body.call_summary,
-      summary: body.call_summary || body.summary,
-      variables: body.variables || body.agent_variables || body.structured_data || {},
+      transcript,
+      summary,
+      variables,
     };
 
     return {

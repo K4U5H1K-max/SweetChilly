@@ -760,6 +760,48 @@ app.delete('/api/vehicles/:id', (req, res) => {
 // Track 4: Driver Safety & Voice Endpoints
 // ==========================================
 
+// Initialize Voice Service with Fleet Store Accessor & Escalation Hook
+voiceService.init(() => vehicles);
+
+voiceService.registerEscalationHook(({ session, vehicle, outcome, summary }) => {
+  const nextAltNum = alerts.reduce((max, alt) => {
+    const match = String(alt.id).match(/ALT-NER-(\d+)/);
+    return match ? Math.max(max, parseInt(match[1], 10)) : max;
+  }, 100) + 1;
+
+  const regStr = vehicle?.regNumber || vehicle?.id || 'Fleet Unit';
+  const corridorStr = vehicle?.assignedCorridor || 'Transit Arterial';
+  const newAlert = {
+    id: `ALT-NER-${String(nextAltNum).padStart(3, '0')}`,
+    incidentId: session?.callId || vehicle?.id || 'TRACK4-VOICE',
+    headline: `VOICE SAFETY ESCALATION: ${outcome.replace(/_/g, ' ')} (${regStr})`,
+    district: corridorStr,
+    level: outcome === 'ASSISTANCE_REQUIRED' || outcome === 'BREAKDOWN' ? 'CRITICAL' : 'WARNING',
+    impact: summary || `Safety check evaluated with outcome ${outcome}. Operator intervention required.`,
+    advisory: `Driver safety alert on corridor ${corridorStr}. Verify driver condition and review session ${session?.callId}.`,
+    activeSince: 'Just now',
+  };
+  alerts.unshift(newAlert);
+  console.log(`[Alert Registry] Operational escalation alert registered: ${newAlert.id} for session ${session?.callId}`);
+});
+
+// Voice Service Configuration Info (Safe for frontend consumption)
+app.get('/api/voice/config', (req, res) => {
+  const providerName = process.env.VOICE_PROVIDER || 'mock';
+  const liveCallsEnabled = process.env.SARVAM_LIVE_CALLS_ENABLED === 'true';
+  const enforceAllowlist = process.env.ENFORCE_SARVAM_CALL_ALLOWLIST !== 'false';
+
+  res.json({
+    success: true,
+    data: {
+      provider: providerName,
+      isLiveSarvam: providerName === 'sarvam',
+      liveCallsEnabled,
+      enforceAllowlist,
+    },
+  });
+});
+
 // Flag / Unflag Vehicle for Safety Check
 app.post('/api/voice/flag-vehicle', (req, res) => {
   const validation = validateFlagRequest(req.body);

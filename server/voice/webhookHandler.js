@@ -90,10 +90,13 @@ export async function processStatusWebhook({ headers = {}, body = {}, query = {}
   }
 
   const payload = authResult.event || body;
+  const metadata = payload.metadata || payload.webhook_config?.metadata || body.metadata || body.webhook_config?.metadata || {};
+
+  const payloadCallId = payload.callId || metadata.internal_call_id || metadata.internalCallId || metadata.call_id || body.callId || body.internal_call_id;
+  const providerCallId = payload.providerCallId || body.job_id || body.interaction_id || body.outbound_id || body.providerCallId || body.id || payload.job_id;
+  const vehicleId = payload.vehicleId || metadata.vehicle_id || metadata.vehicleId || body.vehicle_id || body.vehicleId || payload.vehicle_id;
+
   const {
-    callId: payloadCallId,
-    providerCallId,
-    vehicleId,
     status,
     eventId,
     timestamp = new Date().toISOString(),
@@ -131,11 +134,20 @@ export async function processStatusWebhook({ headers = {}, body = {}, query = {}
     (vehicleId ? voiceService.getRawSessionByAnyId(vehicleId) : null);
 
   if (!session) {
+    const sanitizedWarning = {
+      lookupId: lookupId || 'N/A',
+      vehicleId: vehicleId || 'N/A',
+      status: normalizedStatus,
+      topLevelKeys: Object.keys(body),
+      metadataKeys: Object.keys(metadata),
+    };
+    console.warn(`[SarvamWebhook] Correlation warning: Call session '${lookupId || vehicleId}' not found in active session store.\n${JSON.stringify(sanitizedWarning, null, 2)}`);
     return {
-      statusCode: 404,
+      statusCode: 200,
       body: {
-        success: false,
-        error: `Call session '${lookupId || vehicleId}' not found in active session store.`,
+        received: true,
+        processed: false,
+        reason: 'UNMATCHED_CALL',
       },
     };
   }
@@ -212,16 +224,24 @@ export async function processStatusWebhook({ headers = {}, body = {}, query = {}
     if (vehicle) {
       vehicle.safetyStatus = normalized.outcome;
       vehicle.lastSafetyCheck = timestamp;
+      vehicle.activeCallId = session.callId;
       if (normalized.outcome === 'SAFE') {
         vehicle.isFlagged = false;
         vehicle.flagReason = null;
       } else {
         vehicle.isFlagged = true;
-        if (!vehicle.flagReason) {
-          vehicle.flagReason = `Safety check outcome: ${normalized.outcome}`;
-        }
+        vehicle.flagReason = `Safety check outcome: ${normalized.outcome}`;
       }
       vehicle.updatedAt = timestamp;
+    }
+
+    if (normalized.escalationRequired && voiceService.notifyEscalation) {
+      voiceService.notifyEscalation({
+        session,
+        vehicle,
+        outcome: normalized.outcome,
+        summary: normalized.summary,
+      });
     }
   }
 
@@ -245,8 +265,19 @@ export async function processStatusWebhook({ headers = {}, body = {}, query = {}
     if (vehicle) {
       vehicle.safetyStatus = normalized.outcome;
       vehicle.lastSafetyCheck = timestamp;
+      vehicle.activeCallId = session.callId;
       vehicle.isFlagged = true;
+      vehicle.flagReason = `Safety check failed: ${reason || normalizedStatus}`;
       vehicle.updatedAt = timestamp;
+    }
+
+    if (voiceService.notifyEscalation) {
+      voiceService.notifyEscalation({
+        session,
+        vehicle,
+        outcome: normalized.outcome,
+        summary: session.summary,
+      });
     }
   }
 

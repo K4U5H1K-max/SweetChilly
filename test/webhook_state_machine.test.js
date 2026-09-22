@@ -48,14 +48,17 @@ const triggerRes = await voiceService.triggerSafetyCall(testVehicles, {
 });
 const testCallId = triggerRes.session.callId;
 
-// A. Unknown Call ID -> 404
-console.log('  Step A: Unknown Call ID Rejection...');
+// A. Unknown Call ID -> 200 UNMATCHED_CALL (Graceful Acknowledgment)
+console.log('  Step A: Unknown Call ID Acknowledgment...');
 const unknownRes = await processStatusWebhook({
   headers: {},
   body: { callId: 'CALL-NER-9999', status: 'RINGING' },
 });
-assert.strictEqual(unknownRes.statusCode, 404);
-console.log('    -> 404 correctly returned for non-existent call session.');
+assert.strictEqual(unknownRes.statusCode, 200);
+assert.strictEqual(unknownRes.body.received, true);
+assert.strictEqual(unknownRes.body.processed, false);
+assert.strictEqual(unknownRes.body.reason, 'UNMATCHED_CALL');
+console.log('    -> 200 (UNMATCHED_CALL) correctly returned to prevent provider retries.');
 
 // B. Invalid Status -> 400
 console.log('  Step B: Invalid Status Rejection...');

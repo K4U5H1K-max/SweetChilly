@@ -13,6 +13,7 @@ class VoiceService {
   constructor() {
     this.sessions = [];
     this.getVehicles = () => [];
+    this.escalationHooks = [];
   }
 
   /**
@@ -20,6 +21,28 @@ class VoiceService {
    */
   init(vehiclesGetter) {
     this.getVehicles = typeof vehiclesGetter === 'function' ? vehiclesGetter : () => vehiclesGetter;
+  }
+
+  /**
+   * Register a callback for when an operational escalation occurs.
+   */
+  registerEscalationHook(fn) {
+    if (typeof fn === 'function') {
+      this.escalationHooks.push(fn);
+    }
+  }
+
+  /**
+   * Dispatches escalation event to registered hooks.
+   */
+  notifyEscalation({ session, vehicle, outcome, summary }) {
+    for (const hook of this.escalationHooks) {
+      try {
+        hook({ session, vehicle, outcome, summary });
+      } catch (err) {
+        console.error('[VoiceService] Error in escalation hook:', err);
+      }
+    }
   }
 
   /**

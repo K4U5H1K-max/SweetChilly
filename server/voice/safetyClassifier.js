@@ -258,10 +258,15 @@ export function classifyFromBooleans({
   summary = '',
   rawOutcome = {},
 } = {}) {
-  // Check if explicit valid outcome is provided
-  const explicitOutcome = (rawOutcome.outcome || rawOutcome.structuredOutcome);
-  if (explicitOutcome && VALID_SAFETY_STATUSES.includes(String(explicitOutcome).toUpperCase())) {
-    const validOutcome = String(explicitOutcome).toUpperCase();
+  // Check if explicit valid outcome is provided (filter out non-terminal and un-evaluated outcomes)
+  const rawExplicit = (rawOutcome.outcome || rawOutcome.structuredOutcome || rawOutcome.goal_evaluated || rawOutcome.call_goal_status);
+  const explicitStr = rawExplicit ? String(rawExplicit).trim().toUpperCase() : null;
+  const isTerminalExplicit = explicitStr &&
+    VALID_SAFETY_STATUSES.includes(explicitStr) &&
+    !['NOT_CHECKED', 'PENDING_CALL', 'NOT_EVALUATED', 'NOT EVALUATED', 'NONE'].includes(explicitStr);
+
+  if (isTerminalExplicit) {
+    const validOutcome = explicitStr;
     const defaultFlags = OUTCOME_BOOLEAN_MATRIX[validOutcome] || OUTCOME_BOOLEAN_MATRIX.UNKNOWN;
     const isEscalation = requiresEscalation(validOutcome);
     return {
@@ -340,56 +345,73 @@ export function classifyFromBooleans({
  * Normalizes an external or LLM-generated result object into standard schema.
  */
 export function normalizeStructuredResult(raw = {}, fallbackOutcome = 'UNKNOWN') {
-  const rawOutcomeStr = raw.outcome || raw.structuredOutcome;
-  const hasExplicitValidOutcome = rawOutcomeStr && VALID_SAFETY_STATUSES.includes(String(rawOutcomeStr).toUpperCase());
+  const vars = {
+    ...(raw.variables || {}),
+    ...(raw.agent_variables || {}),
+    ...(raw.extracted_variables || {}),
+    ...(raw.structured_data || {}),
+    ...raw,
+  };
+
+  const rawOutcomeStr = vars.outcome || vars.structuredOutcome || vars.goal_evaluated || vars.call_goal_status;
+  const outcomeUpper = rawOutcomeStr ? String(rawOutcomeStr).trim().toUpperCase() : null;
+  const hasExplicitValidOutcome = outcomeUpper &&
+    VALID_SAFETY_STATUSES.includes(outcomeUpper) &&
+    !['NOT_CHECKED', 'PENDING_CALL', 'NOT_EVALUATED', 'NOT EVALUATED', 'NONE'].includes(outcomeUpper);
 
   // If no valid explicit outcome, but boolean properties are present (e.g. from Sarvam post-call outputs), route through classifyFromBooleans
   if (
     !hasExplicitValidOutcome &&
-    (raw.driver_safe !== undefined ||
-      raw.driverSafe !== undefined ||
-      raw.vehicle_operational !== undefined ||
-      raw.vehicleOperational !== undefined ||
-      raw.road_passable !== undefined ||
-      raw.roadPassable !== undefined ||
-      raw.assistance_required !== undefined ||
-      raw.assistanceRequired !== undefined ||
-      raw.assistance_requested !== undefined)
+    (vars.driver_safe !== undefined ||
+      vars.driverSafe !== undefined ||
+      vars.vehicle_operational !== undefined ||
+      vars.vehicleOperational !== undefined ||
+      vars.road_passable !== undefined ||
+      vars.roadPassable !== undefined ||
+      vars.assistance_required !== undefined ||
+      vars.assistanceRequired !== undefined ||
+      vars.assistance_requested !== undefined)
   ) {
     return classifyFromBooleans({
-      driverSafe: raw.driverSafe !== undefined ? raw.driverSafe : raw.driver_safe,
-      vehicleOperational: raw.vehicleOperational !== undefined ? raw.vehicleOperational : raw.vehicle_operational,
-      roadPassable: raw.roadPassable !== undefined ? raw.roadPassable : raw.road_passable,
+      driverSafe: vars.driverSafe !== undefined ? vars.driverSafe : vars.driver_safe,
+      vehicleOperational: vars.vehicleOperational !== undefined ? vars.vehicleOperational : vars.vehicle_operational,
+      roadPassable: vars.roadPassable !== undefined ? vars.roadPassable : vars.road_passable,
       assistanceRequired:
-        raw.assistanceRequired !== undefined
-          ? raw.assistanceRequired
-          : raw.assistance_required !== undefined
-          ? raw.assistance_required
-          : raw.assistance_requested,
-      transcript: raw.transcript,
-      summary: raw.summary || raw.call_summary,
-      rawOutcome: raw,
+        vars.assistanceRequired !== undefined
+          ? vars.assistanceRequired
+          : vars.assistance_required !== undefined
+          ? vars.assistance_required
+          : vars.assistance_requested,
+      transcript: vars.transcript || raw.transcript,
+      summary: vars.summary || vars.call_summary || raw.summary || raw.call_summary,
+      rawOutcome: vars,
     });
   }
 
-  const outcome = hasExplicitValidOutcome ? String(rawOutcomeStr).toUpperCase() : fallbackOutcome;
+  // If no explicit valid outcome and no booleans, check if transcript or summary can be classified
+  const textContent = (vars.transcript || raw.transcript || vars.summary || vars.call_summary || raw.summary || raw.call_summary || '').trim();
+  if (!hasExplicitValidOutcome && textContent.length > 0) {
+    const textClassification = classifyDialogue(textContent, null, vars.vehicleContext || raw.vehicleContext || {});
+    if (textClassification && textClassification.outcome !== 'UNKNOWN') {
+      return textClassification;
+    }
+  }
+
+  const outcome = hasExplicitValidOutcome ? outcomeUpper : fallbackOutcome;
   const validOutcome = VALID_SAFETY_STATUSES.includes(outcome) ? outcome : fallbackOutcome;
   const defaultFlags = OUTCOME_BOOLEAN_MATRIX[validOutcome] || OUTCOME_BOOLEAN_MATRIX.UNKNOWN;
 
-  const rawDriverSafe = raw.driverSafe !== undefined ? raw.driverSafe : raw.driver_safe;
-  const rawVehicleOp = raw.vehicleOperational !== undefined ? raw.vehicleOperational : raw.vehicle_operational;
-  const rawRoadPassable = raw.roadPassable !== undefined ? raw.roadPassable : raw.road_passable;
-  const rawAssistReq = raw.assistanceRequired !== undefined ? raw.assistanceRequired : (raw.assistance_required || raw.assistance_requested);
+  const rawDriverSafe = vars.driverSafe !== undefined ? vars.driverSafe : vars.driver_safe;
+  const rawVehicleOp = vars.vehicleOperational !== undefined ? vars.vehicleOperational : vars.vehicle_operational;
+  const rawRoadPassable = vars.roadPassable !== undefined ? vars.roadPassable : vars.road_passable;
+  const rawAssistReq = vars.assistanceRequired !== undefined ? vars.assistanceRequired : (vars.assistance_required || vars.assistance_requested);
 
   const parsedDriverSafe = rawDriverSafe !== undefined ? parseBooleanFlag(rawDriverSafe, defaultFlags.driverSafe) : defaultFlags.driverSafe;
   const parsedVehicleOp = rawVehicleOp !== undefined ? parseBooleanFlag(rawVehicleOp, defaultFlags.vehicleOperational) : defaultFlags.vehicleOperational;
   const parsedRoadPassable = rawRoadPassable !== undefined ? parseBooleanFlag(rawRoadPassable, defaultFlags.roadPassable) : defaultFlags.roadPassable;
   const parsedAssistReq = rawAssistReq !== undefined ? parseBooleanFlag(rawAssistReq, defaultFlags.assistanceRequired) : defaultFlags.assistanceRequired;
 
-  let isEscalation = requiresEscalation(validOutcome);
-  if (validOutcome === 'ROAD_BLOCKED' && parsedAssistReq === true) {
-    isEscalation = true;
-  }
+  const isEscalation = requiresEscalation(validOutcome);
 
   return {
     driverSafe: parsedDriverSafe,
@@ -397,10 +419,10 @@ export function normalizeStructuredResult(raw = {}, fallbackOutcome = 'UNKNOWN')
     roadPassable: parsedRoadPassable,
     assistanceRequired: parsedAssistReq,
     outcome: validOutcome,
-    confidence: typeof raw.confidence === 'number' ? Math.min(1.0, Math.max(0.0, raw.confidence)) : (raw.outcomeConfidence || 0.85),
-    summary: String(raw.summary || raw.call_summary || `Safety check evaluated with outcome ${validOutcome}.`),
+    confidence: typeof vars.confidence === 'number' ? Math.min(1.0, Math.max(0.0, vars.confidence)) : (vars.outcomeConfidence || 0.85),
+    summary: String(vars.summary || vars.call_summary || raw.summary || raw.call_summary || `Safety check evaluated with outcome ${validOutcome}.`),
     structuredOutcome: validOutcome,
-    outcomeConfidence: typeof raw.confidence === 'number' ? Math.min(1.0, Math.max(0.0, raw.confidence)) : (raw.outcomeConfidence || 0.85),
+    outcomeConfidence: typeof vars.confidence === 'number' ? Math.min(1.0, Math.max(0.0, vars.confidence)) : (vars.outcomeConfidence || 0.85),
     escalationRequired: isEscalation,
   };
 }

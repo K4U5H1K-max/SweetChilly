@@ -226,6 +226,13 @@ export const api = {
       body: JSON.stringify(data),
     });
   },
+
+  /**
+   * Get Voice Provider runtime configuration (provider type, live calls state)
+   */
+  async getVoiceConfig() {
+    return request('/api/voice/config');
+  },
 };
 
 export default api;
