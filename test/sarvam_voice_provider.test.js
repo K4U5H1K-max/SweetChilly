@@ -51,7 +51,7 @@ const providerConfig = {
   orgId: 'org_ner_brahmaputra_01',
   workspaceId: 'ws_disaster_ops_01',
   agentId: 'agent_driver_safety_v2',
-  agentVersion: '2.1',
+  agentVersion: '2',
   connectionId: 'conn_vobiz_india_01',
   agentPhoneNumber: '+911140845678',
   webhookUrl: 'https://brahmaputra.assam.gov.in/api/voice/webhooks/status',
@@ -67,7 +67,8 @@ const payload = sarvamProvider.buildOutboundPayload({
 });
 
 assert.strictEqual(payload.app_config.app_id, 'agent_driver_safety_v2');
-assert.strictEqual(payload.app_config.app_version, '2.1');
+assert.strictEqual(payload.app_config.app_version, 2);
+assert.strictEqual(typeof payload.app_config.app_version, 'number');
 assert.strictEqual(payload.app_config.app_type, 'agent');
 assert.strictEqual(payload.app_config.connection_config.connection_id, 'conn_vobiz_india_01');
 assert.strictEqual(payload.app_config.connection_config.agent_phone_number, '+911140845678');
@@ -456,5 +457,74 @@ try {
   global.fetch = originalFetch;
 }
 
-console.log('\n=== ALL 18 SARVAM VOICE PROVIDER PHASE 2B TESTS PASSED SUCCESSFULLY ===\n');
+// -------------------------------------------------------------
+// 19. Strict SARVAM_AGENT_VERSION Positive Integer Validation
+// -------------------------------------------------------------
+console.log('19. Testing Strict SARVAM_AGENT_VERSION Positive Integer Enforcement...');
+
+// A. "1" string produces JSON app_version: 1 (number)
+const provV1 = new SarvamVoiceProvider({ ...providerConfig, agentVersion: '1' });
+const payloadV1 = provV1.buildOutboundPayload({ session: testSession, vehicle: sampleVehicles[0] });
+assert.strictEqual(payloadV1.app_config.app_version, 1);
+assert.strictEqual(typeof payloadV1.app_config.app_version, 'number');
+assert.strictEqual(JSON.parse(JSON.stringify(payloadV1)).app_config.app_version, 1);
+
+// B. "2" string produces JSON app_version: 2 (number)
+const provV2 = new SarvamVoiceProvider({ ...providerConfig, agentVersion: '2' });
+const payloadV2 = provV2.buildOutboundPayload({ session: testSession, vehicle: sampleVehicles[0] });
+assert.strictEqual(payloadV2.app_config.app_version, 2);
+assert.strictEqual(typeof payloadV2.app_config.app_version, 'number');
+
+// C. Numeric literal 3 produces JSON app_version: 3 (number)
+const provV3 = new SarvamVoiceProvider({ ...providerConfig, agentVersion: 3 });
+const payloadV3 = provV3.buildOutboundPayload({ session: testSession, vehicle: sampleVehicles[0] });
+assert.strictEqual(payloadV3.app_config.app_version, 3);
+assert.strictEqual(typeof payloadV3.app_config.app_version, 'number');
+
+// D. "v1" is rejected locally
+assert.throws(
+  () => new SarvamVoiceProvider({ ...providerConfig, agentVersion: 'v1' }),
+  /Invalid SARVAM_AGENT_VERSION/,
+  'Must reject "v1" string'
+);
+
+// E. "1.0" is rejected locally (strict integer required)
+assert.throws(
+  () => new SarvamVoiceProvider({ ...providerConfig, agentVersion: '1.0' }),
+  /Invalid SARVAM_AGENT_VERSION/,
+  'Must reject "1.0" float string'
+);
+
+// F. Negative or zero versions are rejected locally
+assert.throws(
+  () => new SarvamVoiceProvider({ ...providerConfig, agentVersion: '0' }),
+  /Invalid SARVAM_AGENT_VERSION/,
+  'Must reject "0"'
+);
+assert.throws(
+  () => new SarvamVoiceProvider({ ...providerConfig, agentVersion: -1 }),
+  /Invalid SARVAM_AGENT_VERSION/,
+  'Must reject -1'
+);
+
+// G. Missing / invalid version prevents Sarvam network request without contacting upstream API
+let networkCalled = false;
+const oldFetch = global.fetch;
+global.fetch = async () => {
+  networkCalled = true;
+  return { ok: true, json: async () => ({}) };
+};
+try {
+  assert.throws(() => {
+    new SarvamVoiceProvider({ ...providerConfig, agentVersion: 'v1.2', liveCallsEnabled: true });
+  }, /Invalid SARVAM_AGENT_VERSION/);
+  assert.strictEqual(networkCalled, false, 'Network request must NOT be initiated on invalid version');
+} finally {
+  global.fetch = oldFetch;
+}
+
+console.log('  ✓ Strict integer parsing & local validation prevent invalid versions from reaching Sarvam.');
+
+console.log('\n=== ALL 19 SARVAM VOICE PROVIDER PHASE 2B TESTS PASSED SUCCESSFULLY ===\n');
+
 

@@ -26,7 +26,12 @@ export class SarvamVoiceProvider extends BaseVoiceProvider {
     this.orgId = process.env.SARVAM_ORG_ID || config.orgId || null;
     this.workspaceId = process.env.SARVAM_WORKSPACE_ID || config.workspaceId || null;
     this.agentId = process.env.SARVAM_AGENT_ID || config.agentId || null;
-    this.agentVersion = process.env.SARVAM_AGENT_VERSION || config.agentVersion || '1.0';
+
+    const configuredVersion = config.agentVersion !== undefined ? config.agentVersion : process.env.SARVAM_AGENT_VERSION;
+    this.agentVersion = parseAndValidateAgentVersion(
+      configuredVersion !== undefined && configuredVersion !== null ? configuredVersion : 1
+    );
+
     this.connectionId = process.env.SARVAM_CONNECTION_ID || config.connectionId || null;
     this.agentPhoneNumber = process.env.SARVAM_AGENT_PHONE_NUMBER || config.agentPhoneNumber || null;
     this.webhookUrl =
@@ -71,6 +76,10 @@ export class SarvamVoiceProvider extends BaseVoiceProvider {
         `[SarvamVoiceProvider] Missing required Sarvam configuration: ${missing.join(', ')}. ` +
         `Please set environment variables or use VOICE_PROVIDER=mock for local simulation.`
       );
+    }
+
+    if (!Number.isInteger(this.agentVersion) || this.agentVersion <= 0) {
+      throw new Error(`[SarvamVoiceProvider] Invalid SARVAM_AGENT_VERSION. Expected a positive integer.`);
     }
   }
 
@@ -123,10 +132,12 @@ export class SarvamVoiceProvider extends BaseVoiceProvider {
       agentVariables.gender = vehicle.driverGender;
     }
 
+    const appVersion = parseAndValidateAgentVersion(this.agentVersion);
+
     const payload = {
       app_config: {
         app_id: this.agentId || 'brahmaputra_safety_agent',
-        app_version: this.agentVersion || '1.0',
+        app_version: appVersion,
         app_type: 'agent',
         connection_config: {
           connection_id: this.connectionId || 'default_connection',
@@ -533,5 +544,46 @@ export function sanitizeDiagnosticText(rawText, secretKey = null) {
   return text;
 }
 
+/**
+ * Validates and converts an agent version value into a strict positive integer.
+ * Rejects floats ("1.0", 1.5), prefixed strings ("v1"), zero, negative integers, NaN, etc.
+ *
+ * @param {string|number} rawVersion
+ * @returns {number}
+ */
+export function parseAndValidateAgentVersion(rawVersion) {
+  if (rawVersion === null || rawVersion === undefined || rawVersion === '') {
+    return 1;
+  }
+
+  if (typeof rawVersion === 'number') {
+    if (Number.isInteger(rawVersion) && rawVersion > 0) {
+      return rawVersion;
+    }
+    throw new Error(`[SarvamVoiceProvider] Invalid SARVAM_AGENT_VERSION '${rawVersion}'. Expected a positive integer.`);
+  }
+
+  if (typeof rawVersion === 'string') {
+    const trimmed = rawVersion.trim();
+    if (!trimmed) {
+      return 1;
+    }
+    // Strict integer regex: only positive integer digits (1, 2, 3, etc.), no decimals, no 'v' prefix
+    if (!/^\d+$/.test(trimmed)) {
+      throw new Error(`[SarvamVoiceProvider] Invalid SARVAM_AGENT_VERSION '${rawVersion}'. Expected a positive integer.`);
+    }
+
+    const parsed = Number.parseInt(trimmed, 10);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      throw new Error(`[SarvamVoiceProvider] Invalid SARVAM_AGENT_VERSION '${rawVersion}'. Expected a positive integer.`);
+    }
+
+    return parsed;
+  }
+
+  throw new Error(`[SarvamVoiceProvider] Invalid SARVAM_AGENT_VERSION. Expected a positive integer.`);
+}
+
 export default SarvamVoiceProvider;
+
 
