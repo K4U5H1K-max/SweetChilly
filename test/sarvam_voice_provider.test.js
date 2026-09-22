@@ -341,4 +341,120 @@ assert.strictEqual(mockCall.session.structuredOutcome, 'DELAYED');
 assert.strictEqual(mockCall.session.provider, 'mock');
 console.log('  ✓ Mock voice provider functions seamlessly with zero regressions.');
 
-console.log('\n=== ALL 15 SARVAM VOICE PROVIDER PHASE 2B TESTS PASSED SUCCESSFULLY ===\n');
+// -------------------------------------------------------------
+// 16. Upstream Sarvam HTTP 422 JSON Error Diagnostic Formatting
+// -------------------------------------------------------------
+console.log('16. Testing Upstream Sarvam HTTP 422 JSON Error Diagnostics...');
+const liveTestProvider = new SarvamVoiceProvider({
+  ...providerConfig,
+  liveCallsEnabled: true,
+});
+
+const originalFetch = global.fetch;
+try {
+  // Mock Sarvam returning HTTP 422 with {"detail":"Invalid app_version"}
+  global.fetch = async () => ({
+    ok: false,
+    status: 422,
+    statusText: 'Unprocessable Entity',
+    text: async () => JSON.stringify({ detail: 'Invalid app_version' }),
+    json: async () => ({ detail: 'Invalid app_version' }),
+  });
+
+  await assert.rejects(
+    async () => {
+      await liveTestProvider.initiateCall({
+        session: { callId: 'CALL-NER-0995' },
+        vehicle: sampleVehicles[0],
+      });
+    },
+    (err) => {
+      assert(err instanceof Error);
+      assert(!err.message.includes('[object Object]'), 'Error message must NOT contain [object Object]');
+      assert(err.message.includes('Status: 422'), 'Error message must include HTTP status');
+      assert(err.message.includes('{"detail":"Invalid app_version"}'), 'Error message must include parsed body');
+      assert(err.message.includes('[SarvamVoiceProvider] Sarvam API error'));
+      return true;
+    },
+    'Should surface clean diagnostic error on HTTP 422'
+  );
+  console.log('  ✓ HTTP 422 JSON error surfaced with clean status and body string without [object Object].');
+} finally {
+  global.fetch = originalFetch;
+}
+
+// -------------------------------------------------------------
+// 17. Telephony Error Sanitization & Masking (Secret & PII Guardrails)
+// -------------------------------------------------------------
+console.log('17. Testing Error Sanitization & PII Masking...');
+try {
+  // Mock Sarvam returning error containing sensitive API key and raw phone number
+  global.fetch = async () => ({
+    ok: false,
+    status: 400,
+    statusText: 'Bad Request',
+    text: async () =>
+      JSON.stringify({
+        error: {
+          code: 'UNVERIFIED_CALLER',
+          message: 'Key test-sarvam-secret-key-xyz cannot call +919864012345',
+        },
+      }),
+  });
+
+  await assert.rejects(
+    async () => {
+      await liveTestProvider.initiateCall({
+        session: { callId: 'CALL-NER-0996' },
+        vehicle: sampleVehicles[0],
+      });
+    },
+    (err) => {
+      assert(!err.message.includes('test-sarvam-secret-key-xyz'), 'Must redact API key');
+      assert(!err.message.includes('+919864012345'), 'Must mask raw phone number');
+      assert(err.message.includes('[REDACTED_SECRET]'), 'Must replace API key with [REDACTED_SECRET]');
+      assert(err.message.includes('+91-98640-XXXXX'), 'Must format masked phone number');
+      assert(!err.message.includes('[object Object]'), 'Must not contain [object Object]');
+      return true;
+    },
+    'Should redact secrets and mask phone numbers in error diagnostics'
+  );
+  console.log('  ✓ API keys redacted and phone numbers masked in diagnostic logs.');
+} finally {
+  global.fetch = originalFetch;
+}
+
+// -------------------------------------------------------------
+// 18. Non-JSON Raw Error Handling (e.g. 502 Bad Gateway HTML)
+// -------------------------------------------------------------
+console.log('18. Testing Non-JSON / Plaintext Error Responses...');
+try {
+  global.fetch = async () => ({
+    ok: false,
+    status: 502,
+    statusText: 'Bad Gateway',
+    text: async () => '<html><body>502 Bad Gateway</body></html>',
+  });
+
+  await assert.rejects(
+    async () => {
+      await liveTestProvider.initiateCall({
+        session: { callId: 'CALL-NER-0997' },
+        vehicle: sampleVehicles[0],
+      });
+    },
+    (err) => {
+      assert(err.message.includes('Status: 502'));
+      assert(err.message.includes('502 Bad Gateway'));
+      assert(!err.message.includes('[object Object]'));
+      return true;
+    },
+    'Should surface plaintext error cleanly'
+  );
+  console.log('  ✓ Non-JSON raw error bodies cleanly captured.');
+} finally {
+  global.fetch = originalFetch;
+}
+
+console.log('\n=== ALL 18 SARVAM VOICE PROVIDER PHASE 2B TESTS PASSED SUCCESSFULLY ===\n');
+

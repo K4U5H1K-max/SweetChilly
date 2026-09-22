@@ -205,6 +205,39 @@ export class SarvamVoiceProvider extends BaseVoiceProvider {
 
     const endpointUrl = this.getEndpointUrl();
 
+    // Safely extract endpoint path without secrets or query parameters
+    let endpointPath = endpointUrl;
+    try {
+      const parsedUrl = new URL(endpointUrl);
+      endpointPath = parsedUrl.pathname;
+    } catch {
+      endpointPath = endpointUrl;
+    }
+
+    // Safely extract webhook URL host/path
+    let webhookHostPath = outboundPayload.webhook_config?.url || 'N/A';
+    try {
+      const parsedWh = new URL(outboundPayload.webhook_config?.url);
+      webhookHostPath = `${parsedWh.host}${parsedWh.pathname}`;
+    } catch {
+      webhookHostPath = outboundPayload.webhook_config?.url || 'N/A';
+    }
+
+    // DEBUG-SAFE summary of outbound payload structure (keys & masked data only)
+    const safeDispatchSummary = {
+      endpoint_path: endpointPath,
+      app_id: outboundPayload.app_config?.app_id || 'N/A',
+      app_version: outboundPayload.app_config?.app_version || 'N/A',
+      connection_id: outboundPayload.app_config?.connection_config?.connection_id || 'N/A',
+      agent_phone_number: maskPhone(outboundPayload.app_config?.connection_config?.agent_phone_number),
+      user_phone_number: maskPhone(outboundPayload.user_config?.user_phone_number),
+      agent_variable_keys: Object.keys(outboundPayload.app_config?.agent_variables || {}),
+      webhook_url_host_path: webhookHostPath,
+      metadata_keys: Object.keys(outboundPayload.webhook_config?.metadata || {}),
+    };
+
+    console.log('[SarvamVoiceProvider] Outbound request dispatch summary:\n' + JSON.stringify(safeDispatchSummary, null, 2));
+
     let response;
     try {
       response = await fetch(endpointUrl, {
@@ -219,12 +252,41 @@ export class SarvamVoiceProvider extends BaseVoiceProvider {
       throw new Error(`[SarvamVoiceProvider] Network request failed when reaching Sarvam API: ${networkErr.message}`);
     }
 
-    const responseBody = await response.json().catch(() => ({}));
+    let rawResponseText = '';
+    try {
+      rawResponseText = await response.text();
+    } catch (readErr) {
+      rawResponseText = '';
+    }
+
+    let parsedResponseBody = null;
+    try {
+      parsedResponseBody = rawResponseText ? JSON.parse(rawResponseText) : null;
+    } catch {
+      parsedResponseBody = null;
+    }
 
     if (!response.ok) {
-      const errorMsg = responseBody?.message || responseBody?.error || `HTTP ${response.status} ${response.statusText}`;
-      throw new Error(`[SarvamVoiceProvider] Sarvam API returned error: ${errorMsg}`);
+      let rawDiagnostic = '';
+      if (parsedResponseBody !== null) {
+        rawDiagnostic = typeof parsedResponseBody === 'string'
+          ? parsedResponseBody
+          : JSON.stringify(parsedResponseBody);
+      } else if (rawResponseText) {
+        rawDiagnostic = rawResponseText;
+      } else {
+        rawDiagnostic = response.statusText || 'Unknown Sarvam Error';
+      }
+
+      const sanitizedBody = sanitizeDiagnosticText(rawDiagnostic, this.apiKey);
+      const statusInfo = response.statusText ? `${response.status} (${response.statusText})` : `${response.status}`;
+      const errorMessage = `[SarvamVoiceProvider] Sarvam API error\nStatus: ${statusInfo}\nBody: ${sanitizedBody}`;
+
+      console.error(errorMessage);
+      throw new Error(errorMessage);
     }
+
+    const responseBody = parsedResponseBody || {};
 
     const providerCallId =
       responseBody.job_id ||
@@ -432,4 +494,44 @@ export class SarvamVoiceProvider extends BaseVoiceProvider {
   }
 }
 
+/**
+ * Safely sanitizes diagnostic error messages, JSON strings, and logs:
+ * - Redacts active API keys and bearer tokens
+ * - Masks any embedded phone numbers (Indian & International E.164)
+ * - Prevents raw credential or PII leakage
+ *
+ * @param {string|object} rawText
+ * @param {string} [secretKey]
+ * @returns {string}
+ */
+export function sanitizeDiagnosticText(rawText, secretKey = null) {
+  if (rawText === null || rawText === undefined) return '';
+  let text = typeof rawText === 'string' ? rawText : JSON.stringify(rawText);
+
+  // 1. Redact specific API key if supplied
+  if (secretKey && typeof secretKey === 'string' && secretKey.trim().length >= 4) {
+    const escapedSecret = secretKey.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    text = text.replace(new RegExp(escapedSecret, 'g'), '[REDACTED_SECRET]');
+  }
+
+  // Also check process.env.SARVAM_API_KEY if defined
+  if (process.env.SARVAM_API_KEY && process.env.SARVAM_API_KEY.trim().length >= 4) {
+    const escapedEnvSecret = process.env.SARVAM_API_KEY.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    text = text.replace(new RegExp(escapedEnvSecret, 'g'), '[REDACTED_SECRET]');
+  }
+
+  // 2. Redact generic API keys / Authorization header tokens
+  text = text.replace(/(?:x-api-key|api[-_]?key|authorization|bearer)[\s:="']+([a-zA-Z0-9_\-\.]{8,})/gi, (match, token) => {
+    return match.replace(token, '[REDACTED_SECRET]');
+  });
+
+  // 3. Mask phone numbers (Indian mobile + international E.164 formats)
+  // Matches +91-98640-12345, +919864012345, 9864012345, +14155552671, etc.
+  text = text.replace(/(?:\+91[\-\s]?)?[6-9]\d{2}[\-\s]?\d{2}[\-\s]?\d{5}\b/g, (match) => maskPhone(match));
+  text = text.replace(/\+[1-9]\d{1,2}[\-\s]?\d{3,4}[\-\s]?\d{4,6}\b/g, (match) => maskPhone(match));
+
+  return text;
+}
+
 export default SarvamVoiceProvider;
+
