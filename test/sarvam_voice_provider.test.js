@@ -55,6 +55,7 @@ const providerConfig = {
   connectionId: 'conn_vobiz_india_01',
   agentPhoneNumber: '+911140845678',
   webhookUrl: 'https://brahmaputra.assam.gov.in/api/voice/webhooks/status',
+  allowedTestNumbers: '+91-98640-12345, +91-94361-99887',
   liveCallsEnabled: false,
 };
 
@@ -180,6 +181,7 @@ console.log('9. Testing Provider Call ID <-> Internal Call ID Bi-directional Cor
 resetVoiceProviderRegistry();
 process.env.VOICE_PROVIDER = 'sarvam';
 process.env.SARVAM_LIVE_CALLS_ENABLED = 'false';
+process.env.SARVAM_ALLOWED_TEST_NUMBERS = '+91-98640-12345, +91-94361-99887';
 
 const serviceCallRes = await voiceService.triggerSafetyCall(sampleVehicles, {
   vehicleId: 'VEH-NER-204',
@@ -525,6 +527,188 @@ try {
 
 console.log('  ✓ Strict integer parsing & local validation prevent invalid versions from reaching Sarvam.');
 
-console.log('\n=== ALL 19 SARVAM VOICE PROVIDER PHASE 2B TESTS PASSED SUCCESSFULLY ===\n');
+// -------------------------------------------------------------
+// 20. ENFORCE_SARVAM_CALL_ALLOWLIST Switch, Fail-Safe, & Exact Matching Tests
+// -------------------------------------------------------------
+console.log('20. Testing ENFORCE_SARVAM_CALL_ALLOWLIST Switch, Fail-Safe, & Exact Matching...');
+
+const dynamicVehicle = {
+  id: 'VEH-NER-999',
+  regNumber: 'AS-01-DYNAMIC-01',
+  name: 'Dynamic Test Vehicle 999',
+  driverName: 'R. Baruah',
+  driverPhone: '+91-98640-54321',
+  isFlagged: true,
+  flagReason: 'Dynamic route safety verification',
+};
+
+// 1. enforcement=true + empty allowlist -> REJECT with fail-safe configuration message
+const emptyAllowlistProv = new SarvamVoiceProvider({
+  ...providerConfig,
+  enforceAllowlist: true,
+  allowedTestNumbers: '', // Explicit empty allowlist
+});
+const emptyCheck = emptyAllowlistProv.checkPhoneAllowlist('+91-98640-54321');
+assert.strictEqual(emptyCheck.allowed, false);
+assert(emptyCheck.reason.includes('Sarvam call allowlist enforcement is enabled but SARVAM_ALLOWED_TEST_NUMBERS is empty.'));
+await assert.rejects(
+  async () => {
+    await emptyAllowlistProv.initiateCall({
+      session: { callId: 'CALL-NER-2001' },
+      vehicle: dynamicVehicle,
+    });
+  },
+  /SARVAM_ALLOWED_TEST_NUMBERS is empty/,
+  'Must reject when allowlist is enforced but empty'
+);
+console.log('  ✓ 1. enforcement=true + empty allowlist -> REJECT (Fail-safe verified).');
+
+// 2. enforcement=true + missing allowlist -> REJECT with fail-safe configuration message
+delete process.env.SARVAM_ALLOWED_TEST_NUMBERS;
+const { allowedTestNumbers: _unused, ...providerConfigWithoutAllowlist } = providerConfig;
+const missingAllowlistProv = new SarvamVoiceProvider({
+  ...providerConfigWithoutAllowlist,
+  enforceAllowlist: true,
+});
+const missingCheck = missingAllowlistProv.checkPhoneAllowlist('+91-98640-54321');
+assert.strictEqual(missingCheck.allowed, false);
+assert(missingCheck.reason.includes('Sarvam call allowlist enforcement is enabled but SARVAM_ALLOWED_TEST_NUMBERS is empty.'));
+await assert.rejects(
+  async () => {
+    await missingAllowlistProv.initiateCall({
+      session: { callId: 'CALL-NER-2002' },
+      vehicle: dynamicVehicle,
+    });
+  },
+  /SARVAM_ALLOWED_TEST_NUMBERS is empty/,
+  'Must reject when allowlist is enforced but missing'
+);
+console.log('  ✓ 2. enforcement=true + missing allowlist -> REJECT (Fail-safe verified).');
+
+// 3. enforcement=true + exact normalized match -> ALLOW
+const exactAllowlistProv = new SarvamVoiceProvider({
+  ...providerConfig,
+  enforceAllowlist: true,
+  allowedTestNumbers: '+91-98765-43210, +91-94361-99887',
+});
+// Exact match with different local formatting normalizes to same E.164 and allows
+const exactMatchedVehicle = {
+  ...dynamicVehicle,
+  driverPhone: '9876543210', // Normalizes to +919876543210
+};
+const exactCheck = exactAllowlistProv.checkPhoneAllowlist(exactMatchedVehicle.driverPhone);
+assert.strictEqual(exactCheck.allowed, true);
+const exactCall = await exactAllowlistProv.initiateCall({
+  session: { callId: 'CALL-NER-2003' },
+  vehicle: exactMatchedVehicle,
+});
+assert.strictEqual(exactCall.status, 'QUEUED');
+console.log('  ✓ 3. enforcement=true + exact normalized match -> ALLOW.');
+
+// 4. enforcement=true + partial/suffix match -> REJECT
+// Target +91-98640-43210 shares suffix '43210' with +91-98765-43210 but has different prefix
+const partialSuffixVehicle = {
+  ...dynamicVehicle,
+  driverPhone: '+91-98640-43210',
+};
+const suffixCheck = exactAllowlistProv.checkPhoneAllowlist(partialSuffixVehicle.driverPhone);
+assert.strictEqual(suffixCheck.allowed, false);
+assert(suffixCheck.reason.includes('not in SARVAM_ALLOWED_TEST_NUMBERS allowlist'));
+await assert.rejects(
+  async () => {
+    await exactAllowlistProv.initiateCall({
+      session: { callId: 'CALL-NER-2004' },
+      vehicle: partialSuffixVehicle,
+    });
+  },
+  /not in SARVAM_ALLOWED_TEST_NUMBERS allowlist/,
+  'Must reject partial/suffix phone match'
+);
+console.log('  ✓ 4. enforcement=true + partial/suffix match -> REJECT.');
+
+// 5. enforcement=false + empty allowlist + valid vehicle.driverPhone -> ALLOW
+const unconstrainedEmptyProv = new SarvamVoiceProvider({
+  ...providerConfig,
+  enforceAllowlist: false,
+  allowedTestNumbers: '', // Empty allowlist
+  liveCallsEnabled: false,
+});
+const unconstrainedCheck = unconstrainedEmptyProv.checkPhoneAllowlist(dynamicVehicle.driverPhone);
+assert.strictEqual(unconstrainedCheck.allowed, true);
+const unconstrainedCall = await unconstrainedEmptyProv.initiateCall({
+  session: { callId: 'CALL-NER-2005' },
+  vehicle: dynamicVehicle,
+});
+assert.strictEqual(unconstrainedCall.status, 'QUEUED');
+assert.strictEqual(unconstrainedCall.isDryRun, true);
+console.log('  ✓ 5. enforcement=false + empty allowlist + valid vehicle.driverPhone -> ALLOW.');
+
+// 6. Invalid driverPhone is still rejected regardless of allowlist mode
+const invalidPhoneVehicle = {
+  ...dynamicVehicle,
+  driverPhone: 'invalid-number-xyz',
+};
+await assert.rejects(
+  async () => {
+    await unconstrainedEmptyProv.initiateCall({
+      session: { callId: 'CALL-NER-2006' },
+      vehicle: invalidPhoneVehicle,
+    });
+  },
+  /Invalid vehicle driverPhone/,
+  'Must reject malformed phone even when allowlist is disabled'
+);
+console.log('  ✓ 6. Invalid driverPhone is still rejected regardless of allowlist mode.');
+
+// 7. SARVAM_LIVE_CALLS_ENABLED protection remains unchanged (Zero live call egress)
+assert.strictEqual(unconstrainedCall.isDryRun, true);
+assert(unconstrainedCall.providerCallId.startsWith('SARVAM-DRYRUN-'));
+console.log('  ✓ 7. SARVAM_LIVE_CALLS_ENABLED protection remains unchanged.');
+
+// 8. Default behavior: Environment variable absent -> allowlist enforced by default
+delete process.env.ENFORCE_SARVAM_CALL_ALLOWLIST;
+const defaultProv = new SarvamVoiceProvider({
+  ...providerConfig,
+  allowedTestNumbers: '+91-94361-99887',
+});
+assert.strictEqual(defaultProv.enforceAllowlist, true);
+await assert.rejects(
+  async () => {
+    await defaultProv.initiateCall({
+      session: { callId: 'CALL-NER-2008' },
+      vehicle: dynamicVehicle, // +91-98640-54321 not in allowlist
+    });
+  },
+  /Telephony guardrail blocked/
+);
+console.log('  ✓ 8. Environment variable absent -> allowlist enforced by default.');
+
+// 9. Integration with VoiceService, Cooldown, and Idempotency
+resetVoiceProviderRegistry();
+process.env.VOICE_PROVIDER = 'sarvam';
+process.env.SARVAM_LIVE_CALLS_ENABLED = 'false';
+process.env.ENFORCE_SARVAM_CALL_ALLOWLIST = 'false';
+
+const testFleet = [dynamicVehicle];
+const serviceCall = await voiceService.triggerSafetyCall(testFleet, {
+  vehicleId: 'VEH-NER-999',
+  flagReason: 'Dynamic safety check',
+  forceOverride: true,
+});
+assert.strictEqual(serviceCall.success, true);
+assert.strictEqual(serviceCall.session.vehicleId, 'VEH-NER-999');
+
+// Cooldown active immediately after call
+const cooldownBlocked = await voiceService.triggerSafetyCall(testFleet, {
+  vehicleId: 'VEH-NER-999',
+  forceOverride: false,
+});
+assert.strictEqual(cooldownBlocked.success, false);
+assert.strictEqual(cooldownBlocked.cooldown, true);
+console.log('  ✓ 9. VoiceService lifecycle and cooldown protections verified with ENFORCE_SARVAM_CALL_ALLOWLIST=false.');
+
+console.log('\n=== ALL 20 SARVAM VOICE PROVIDER PHASE 2B TESTS PASSED SUCCESSFULLY ===\n');
+
+
 
 

@@ -200,6 +200,7 @@ const server = app.listen(0, async () => {
     resetVoiceProviderRegistry();
     process.env.VOICE_PROVIDER = 'sarvam';
     process.env.SARVAM_LIVE_CALLS_ENABLED = 'false';
+    process.env.SARVAM_ALLOWED_TEST_NUMBERS = '+91-98640-12345, +919864012345';
     resetCooldown();
 
     const trigResp = await fetch(`${baseUrl}/api/voice/calls/trigger`, {

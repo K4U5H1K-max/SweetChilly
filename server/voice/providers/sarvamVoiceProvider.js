@@ -13,7 +13,7 @@
 
 import { BaseVoiceProvider } from './baseProvider.js';
 import { normalizeStructuredResult, classifyFromBooleans } from '../safetyClassifier.js';
-import { maskPhone } from '../securityGuardrails.js';
+import { maskPhone, validateAndNormalizePhone } from '../securityGuardrails.js';
 
 export class SarvamVoiceProvider extends BaseVoiceProvider {
   /**
@@ -45,10 +45,30 @@ export class SarvamVoiceProvider extends BaseVoiceProvider {
       ? Boolean(config.liveCallsEnabled)
       : (liveEnv === 'true' || liveEnv === true);
 
-    const allowlistEnv = process.env.SARVAM_ALLOWED_TEST_NUMBERS || config.allowedTestNumbers || '';
-    this.allowedTestNumbers = typeof allowlistEnv === 'string'
-      ? allowlistEnv.split(',').map((n) => n.trim().replace(/[- ]/g, '')).filter(Boolean)
+    const allowlistEnv = config.allowedTestNumbers !== undefined && config.allowedTestNumbers !== null
+      ? config.allowedTestNumbers
+      : (process.env.SARVAM_ALLOWED_TEST_NUMBERS || '');
+    const rawAllowlist = typeof allowlistEnv === 'string'
+      ? allowlistEnv.split(',').map((n) => n.trim()).filter(Boolean)
       : (Array.isArray(allowlistEnv) ? allowlistEnv : []);
+
+    // Store normalized E.164 phone numbers for strict exact authorization comparison
+    this.allowedTestNumbers = rawAllowlist
+      .map((num) => {
+        const norm = validateAndNormalizePhone(String(num));
+        return norm.valid ? norm.phone : String(num).replace(/[- ]/g, '');
+      })
+      .filter(Boolean);
+
+    // Allowlist enforcement switch: default is true when absent/unspecified (safe default)
+    const enforceAllowlistEnv = process.env.ENFORCE_SARVAM_CALL_ALLOWLIST;
+    if (config.enforceAllowlist !== undefined) {
+      this.enforceAllowlist = Boolean(config.enforceAllowlist);
+    } else if (enforceAllowlistEnv !== undefined && enforceAllowlistEnv !== null && enforceAllowlistEnv !== '') {
+      this.enforceAllowlist = String(enforceAllowlistEnv).toLowerCase().trim() !== 'false';
+    } else {
+      this.enforceAllowlist = true;
+    }
   }
 
   /**
@@ -84,21 +104,31 @@ export class SarvamVoiceProvider extends BaseVoiceProvider {
   }
 
   /**
-   * Validates if a target phone number is permitted to be called in staging/dev.
+   * Validates if a target phone number is permitted to be called.
+   * - When ENFORCE_SARVAM_CALL_ALLOWLIST=false, allowlist check is skipped and dynamic driverPhone is permitted.
+   * - When ENFORCE_SARVAM_CALL_ALLOWLIST=true (default), destination must exist in SARVAM_ALLOWED_TEST_NUMBERS.
+   * - Fail-safe: If ENFORCE_SARVAM_CALL_ALLOWLIST=true and SARVAM_ALLOWED_TEST_NUMBERS is missing/empty, call is rejected.
+   * - Performs strict exact matching against normalized complete E.164 phone numbers (no permissive suffix matching).
+   *
    * @param {string} phoneNumber
    * @returns {{ allowed: boolean, reason?: string }}
    */
   checkPhoneAllowlist(phoneNumber) {
-    if (!this.allowedTestNumbers || this.allowedTestNumbers.length === 0) {
-      // If no explicit allowlist is configured, all numbers allowed when live calls enabled
+    if (!this.enforceAllowlist) {
       return { allowed: true };
     }
 
-    const cleanTarget = String(phoneNumber || '').replace(/[- ]/g, '');
-    const isAllowed = this.allowedTestNumbers.some((allowed) => {
-      const cleanAllowed = String(allowed).replace(/[- ]/g, '');
-      return cleanTarget === cleanAllowed || cleanTarget.endsWith(cleanAllowed) || cleanAllowed.endsWith(cleanTarget);
-    });
+    if (!this.allowedTestNumbers || this.allowedTestNumbers.length === 0) {
+      return {
+        allowed: false,
+        reason: 'Sarvam call allowlist enforcement is enabled but SARVAM_ALLOWED_TEST_NUMBERS is empty.',
+      };
+    }
+
+    const normTarget = validateAndNormalizePhone(phoneNumber);
+    const targetToCompare = normTarget.valid ? normTarget.phone : String(phoneNumber || '').trim();
+
+    const isAllowed = this.allowedTestNumbers.some((allowed) => allowed === targetToCompare);
 
     if (!isAllowed) {
       return {
@@ -177,14 +207,24 @@ export class SarvamVoiceProvider extends BaseVoiceProvider {
       throw new Error('[SarvamVoiceProvider] Vehicle record is required to initiate call.');
     }
 
-    const outboundPayload = this.buildOutboundPayload({ session, vehicle, flagReason });
     const targetPhone = vehicle.driverPhone;
+    if (!targetPhone) {
+      throw new Error('[SarvamVoiceProvider] Vehicle record has no registered driverPhone.');
+    }
 
-    // Check allowlist
-    const allowlistCheck = this.checkPhoneAllowlist(targetPhone);
+    // Validate destination phone number format
+    const phoneValidation = validateAndNormalizePhone(targetPhone);
+    if (!phoneValidation.valid) {
+      throw new Error(`[SarvamVoiceProvider] Invalid vehicle driverPhone: ${phoneValidation.error}`);
+    }
+
+    // Check allowlist (enforced by default, or skipped when ENFORCE_SARVAM_CALL_ALLOWLIST=false)
+    const allowlistCheck = this.checkPhoneAllowlist(phoneValidation.phone || targetPhone);
     if (!allowlistCheck.allowed) {
       throw new Error(`[SarvamVoiceProvider] Telephony guardrail blocked: ${allowlistCheck.reason}`);
     }
+
+    const outboundPayload = this.buildOutboundPayload({ session, vehicle, flagReason });
 
     // DRY-RUN SAFETY MODE
     if (!this.liveCallsEnabled) {
