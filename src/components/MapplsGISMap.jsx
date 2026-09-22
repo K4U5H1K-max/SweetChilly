@@ -9,6 +9,8 @@ export default function MapplsGISMap({
   onSelectVehicle,
   onEditVehicle,
   onOpenSafetyModal,
+  onOpenDeployModal,
+  onOpenVehicleHistory,
 }) {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -361,25 +363,30 @@ export default function MapplsGISMap({
       else if (veh.safetyStatus === 'ASSISTANCE_REQUIRED') safetyBadgeClass = 'bg-red-100 text-red-900 font-bold animate-pulse';
       else if (veh.isFlagged) safetyBadgeClass = 'bg-amber-100 text-amber-800 font-bold';
 
+      const isAvailable = veh.deploymentStatus === 'AVAILABLE' || !veh.hasActiveDeployment;
+      const depStatusText = veh.deploymentStatus || (isAvailable ? 'AVAILABLE' : 'ACTIVE');
+
       const popupHtml = `
-        <div class="p-3.5 bg-white min-w-[270px] font-sans">
+        <div class="p-3.5 bg-white min-w-[280px] font-sans">
           <div class="flex items-center justify-between border-b border-slate-100 pb-2 mb-2">
             <span class="font-mono text-[10px] font-bold text-slate-500">${veh.id}</span>
             <div class="flex items-center gap-1">
               <span class="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
-                isEmergency
-                  ? 'bg-rose-100 text-rose-800'
-                  : isDelayed
-                  ? 'bg-amber-100 text-amber-800'
+                isAvailable
+                  ? 'bg-emerald-100 text-emerald-800'
                   : 'bg-blue-100 text-blue-800'
               }">
-                ${statusNormalized.replace('_', ' ')}
+                ${depStatusText}
               </span>
             </div>
           </div>
           <div class="font-bold text-slate-900 text-sm mb-0.5">${veh.name}</div>
           <div class="text-xs text-slate-600 mb-2">
-            <span class="font-medium">${veh.origin}</span> → <span class="font-medium">${veh.destination}</span>
+            ${
+              isAvailable
+                ? `<span class="italic text-slate-500">Idle / Ready for Dispatch</span>`
+                : `<span class="font-medium">${veh.origin}</span> → <span class="font-medium">${veh.destination}</span>`
+            }
           </div>
 
           <div class="bg-slate-50 p-2 rounded-md border border-slate-100 text-xs space-y-1 mb-2">
@@ -387,6 +394,14 @@ export default function MapplsGISMap({
               <span class="text-slate-500">Driver:</span>
               <span class="font-semibold text-slate-800">${veh.driverName || 'Operator'}</span>
             </div>
+            ${
+              veh.assignedCorridor && !isAvailable
+                ? `<div class="flex justify-between">
+                    <span class="text-slate-500">Corridor:</span>
+                    <span class="font-semibold text-slate-800">${veh.assignedCorridor}</span>
+                  </div>`
+                : ''
+            }
             <div class="flex justify-between">
               <span class="text-slate-500">Safety State:</span>
               <span class="px-1.5 py-0.2 rounded text-[10px] font-bold ${safetyBadgeClass}">${safetyStatusText}</span>
@@ -400,7 +415,7 @@ export default function MapplsGISMap({
             }
             <div class="flex justify-between">
               <span class="text-slate-500">Payload:</span>
-              <span class="font-semibold text-slate-800">${veh.cargo} (${veh.capacity || '5T'})</span>
+              <span class="font-semibold text-slate-800">${veh.cargo || 'Relief Supplies'} (${veh.capacity || '5T'})</span>
             </div>
             <div class="flex justify-between">
               <span class="text-slate-500">Speed:</span>
@@ -419,18 +434,25 @@ export default function MapplsGISMap({
             <span class="text-[10px] font-mono text-slate-400">
               ${veh.currentPos.lat.toFixed(3)}°N, ${veh.currentPos.lng.toFixed(3)}°E
             </span>
-            <div class="flex items-center gap-1.5">
+            <div class="flex items-center gap-1">
               ${
-                onOpenSafetyModal
-                  ? `<button id="safety-veh-btn-${veh.id}" class="px-2 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition-colors flex items-center gap-1">
-                      📞 Safety
+                isAvailable && onOpenDeployModal
+                  ? `<button id="deploy-veh-btn-${veh.id}" class="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors">
+                      ⚡ Deploy
                     </button>`
                   : ''
               }
               ${
-                onEditVehicle
-                  ? `<button id="edit-veh-btn-${veh.id}" class="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-semibold transition-colors">
-                      Update
+                onOpenVehicleHistory
+                  ? `<button id="hist-veh-btn-${veh.id}" class="px-2 py-1 rounded bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-semibold transition-colors">
+                      History
+                    </button>`
+                  : ''
+              }
+              ${
+                onOpenSafetyModal
+                  ? `<button id="safety-veh-btn-${veh.id}" class="px-2 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition-colors">
+                      📞 Safety
                     </button>`
                   : ''
               }
@@ -450,6 +472,14 @@ export default function MapplsGISMap({
         if (safetyBtn && onOpenSafetyModal) {
           safetyBtn.onclick = () => onOpenSafetyModal(veh.id);
         }
+        const deployBtn = document.getElementById(`deploy-veh-btn-${veh.id}`);
+        if (deployBtn && onOpenDeployModal) {
+          deployBtn.onclick = () => onOpenDeployModal(veh.id);
+        }
+        const histBtn = document.getElementById(`hist-veh-btn-${veh.id}`);
+        if (histBtn && onOpenVehicleHistory) {
+          histBtn.onclick = () => onOpenVehicleHistory(veh.id);
+        }
       });
 
       marker.on('click', () => {
@@ -461,7 +491,7 @@ export default function MapplsGISMap({
       vehiclesLayerRef.current.addLayer(marker);
       vehicleMarkersMapRef.current.set(veh.id, marker);
     });
-  }, [vehicles, layers.vehicles, selectedVehicleId, onSelectVehicle, onEditVehicle, onOpenSafetyModal]);
+  }, [vehicles, layers.vehicles, selectedVehicleId, onSelectVehicle, onEditVehicle, onOpenSafetyModal, onOpenDeployModal, onOpenVehicleHistory]);
 
   // Update AI Projected Active Route
   useEffect(() => {

@@ -342,7 +342,7 @@ export default function DriverSafetyModal({ vehicleId, isOpen, onClose }) {
           <div>
             <span className="text-slate-400 text-[10px] font-bold uppercase block">Vehicle Unit</span>
             <span className="font-mono font-bold text-slate-900 text-sm">{vehicle.id}</span>
-            <div className="text-slate-500 text-[11px] truncate">{vehicle.name}</div>
+            <div className="text-slate-500 text-[11px] truncate">{vehicle.name} ({vehicle.type})</div>
           </div>
 
           <div>
@@ -352,9 +352,11 @@ export default function DriverSafetyModal({ vehicleId, isOpen, onClose }) {
           </div>
 
           <div>
-            <span className="text-slate-400 text-[10px] font-bold uppercase block">Corridor & Cargo</span>
-            <span className="font-semibold text-slate-800">{vehicle.assignedCorridor || 'NH-6 Arterial'}</span>
-            <div className="text-slate-500 text-[11px] truncate">{vehicle.cargo}</div>
+            <span className="text-slate-400 text-[10px] font-bold uppercase block">Mission Trajectory</span>
+            <span className="font-semibold text-slate-800 truncate block">
+              {vehicle.origin || 'Regional Base'} ➔ {vehicle.destination || 'Destination Hub'}
+            </span>
+            <div className="text-slate-500 text-[11px] truncate">{vehicle.assignedCorridor || 'Arterial Corridor'} • {vehicle.cargo}</div>
           </div>
 
           <div>

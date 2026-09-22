@@ -41,11 +41,11 @@ let testVehicles = [
 ];
 
 // Wire test routes identical to server/index.js
-app.post('/api/voice/flag-vehicle', (req, res) => {
+app.post('/api/voice/flag-vehicle', async (req, res) => {
   const validation = validateFlagRequest(req.body);
   if (!validation.valid) return res.status(400).json({ success: false, message: validation.message });
   const { vehicleId, reason, flagged = true } = req.body;
-  const result = voiceService.flagVehicle(testVehicles, vehicleId, reason, flagged);
+  const result = await voiceService.flagVehicle(testVehicles, vehicleId, reason, flagged);
   if (!result.success) return res.status(404).json({ success: false, message: result.error });
   res.json({ success: true, data: result.vehicle });
 });
@@ -70,8 +70,8 @@ app.get('/api/voice/calls/:callId', (req, res) => {
   res.json({ success: true, data: session });
 });
 
-app.post('/api/voice/calls/:callId/resolve', (req, res) => {
-  const result = voiceService.resolveEscalation(testVehicles, req.params.callId, req.body.notes);
+app.post('/api/voice/calls/:callId/resolve', async (req, res) => {
+  const result = await voiceService.resolveEscalation(testVehicles, req.params.callId, req.body.notes);
   if (!result.success) return res.status(404).json({ success: false, message: result.error });
   res.json({ success: true, data: result.session });
 });

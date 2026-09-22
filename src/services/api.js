@@ -7,12 +7,47 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL !== undefined
   ? import.meta.env.VITE_API_BASE_URL
   : (import.meta.env.DEV ? 'http://localhost:5000' : '');
 
+let currentAuthToken = null;
+
+// Initialize token from localStorage if in browser environment
+if (typeof window !== 'undefined' && window.localStorage) {
+  try {
+    currentAuthToken = localStorage.getItem('ner_auth_token') || null;
+  } catch (e) {
+    // Ignore localStorage access restrictions
+  }
+}
+
+export function setAuthToken(token) {
+  currentAuthToken = token || null;
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      if (token) {
+        localStorage.setItem('ner_auth_token', token);
+      } else {
+        localStorage.removeItem('ner_auth_token');
+      }
+    } catch (e) {
+      // Ignore localStorage access restrictions
+    }
+  }
+}
+
+export function getAuthToken() {
+  return currentAuthToken;
+}
+
+export function clearAuthToken() {
+  setAuthToken(null);
+}
+
 async function request(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint}`;
   const isFormData = options.body instanceof FormData;
 
   const headers = {
     ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+    ...(currentAuthToken ? { 'Authorization': `Bearer ${currentAuthToken}` } : {}),
     ...options.headers,
   };
 
@@ -137,6 +172,83 @@ export const api = {
     });
   },
 
+  // ==========================================
+  // Vehicle Deployment / Trip Management
+  // ==========================================
+
+  /**
+   * Fetch all deployments (optionally filtered by status / vehicleId)
+   * @param {{ status?: string, vehicleId?: string }} [params]
+   */
+  async getDeployments(params = {}) {
+    const query = new URLSearchParams();
+    if (params.status) query.set('status', params.status);
+    if (params.vehicleId) query.set('vehicleId', params.vehicleId);
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    return request(`/api/deployments${qs}`);
+  },
+
+  /**
+   * Fetch a single deployment by ID
+   * @param {string} deploymentId
+   */
+  async getDeploymentById(deploymentId) {
+    return request(`/api/deployments/${encodeURIComponent(deploymentId)}`);
+  },
+
+  /**
+   * Fetch all deployments for a specific vehicle
+   * @param {string} vehicleId
+   * @param {{ status?: string }} [params]
+   */
+  async getVehicleDeployments(vehicleId, params = {}) {
+    const query = new URLSearchParams();
+    if (params.status) query.set('status', params.status);
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    return request(`/api/vehicles/${encodeURIComponent(vehicleId)}/deployments${qs}`);
+  },
+
+  /**
+   * Create a new vehicle deployment
+   * @param {{ vehicleId: string, origin: string, destination: string, assignedCorridor?: string, cargo?: string, priority?: string, status?: string }} data
+   */
+  async createDeployment(data) {
+    return request('/api/deployments', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Start a planned deployment
+   * @param {string} deploymentId
+   */
+  async startDeployment(deploymentId) {
+    return request(`/api/deployments/${encodeURIComponent(deploymentId)}/start`, {
+      method: 'POST',
+    });
+  },
+
+  /**
+   * Complete an active/delayed deployment
+   * @param {string} deploymentId
+   */
+  async completeDeployment(deploymentId) {
+    return request(`/api/deployments/${encodeURIComponent(deploymentId)}/complete`, {
+      method: 'POST',
+    });
+  },
+
+  /**
+   * Cancel a deployment
+   * @param {string} deploymentId
+   */
+  async cancelDeployment(deploymentId) {
+    return request(`/api/deployments/${encodeURIComponent(deploymentId)}/cancel`, {
+      method: 'POST',
+    });
+  },
+
   /**
    * Request Groq-powered disruption-aware route plan
    */
@@ -233,7 +345,63 @@ export const api = {
   async getVoiceConfig() {
     return request('/api/voice/config');
   },
+
+  // ==========================================
+  // Authentication & Identity Management
+  // ==========================================
+
+  setAuthToken,
+  getAuthToken,
+  clearAuthToken,
+
+  /**
+   * Register a new user account (strictly USER role)
+   * @param {{ fullName: string, email: string, password: string }} userData
+   */
+  async register(userData) {
+    const res = await request('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(userData),
+    });
+    if (res?.token) {
+      setAuthToken(res.token);
+    }
+    return res;
+  },
+
+  /**
+   * Authenticate user / admin with email and password
+   * @param {{ email: string, password: string }} credentials
+   */
+  async login(credentials) {
+    const res = await request('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(credentials),
+    });
+    if (res?.token) {
+      setAuthToken(res.token);
+    }
+    return res;
+  },
+
+  /**
+   * Retrieve current authenticated user profile
+   */
+  async getCurrentUser() {
+    return request('/api/auth/me');
+  },
+
+  /**
+   * Terminate authenticated session
+   */
+  async logout() {
+    try {
+      await request('/api/auth/logout', { method: 'POST' });
+    } finally {
+      clearAuthToken();
+    }
+    return { success: true };
+  },
 };
 
 export default api;
-
