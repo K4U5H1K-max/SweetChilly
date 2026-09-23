@@ -616,11 +616,11 @@ export default function MapplsGISMap({
         </div>
 
         {/* Layer Filters */}
-        <div className="flex items-center gap-1.5 text-xs flex-wrap">
+        <div className="flex items-center gap-1.5 text-xs overflow-x-auto pb-1 max-w-full">
           {activeRoute && (
             <button
               onClick={() => setLayers((prev) => ({ ...prev, route: !prev.route }))}
-              className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
+              className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all whitespace-nowrap ${
                 layers.route
                   ? 'bg-blue-600 text-white shadow-xs'
                   : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
@@ -632,7 +632,7 @@ export default function MapplsGISMap({
 
           <button
             onClick={() => setLayers((prev) => ({ ...prev, incidents: !prev.incidents }))}
-            className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
+            className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all whitespace-nowrap ${
               layers.incidents
                 ? 'bg-rose-600 text-white shadow-xs'
                 : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
@@ -643,7 +643,7 @@ export default function MapplsGISMap({
 
           <button
             onClick={() => setLayers((prev) => ({ ...prev, vehicles: !prev.vehicles }))}
-            className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
+            className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all whitespace-nowrap ${
               layers.vehicles
                 ? 'bg-slate-900 text-white shadow-xs'
                 : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
@@ -654,7 +654,7 @@ export default function MapplsGISMap({
 
           <button
             onClick={() => setLayers((prev) => ({ ...prev, corridors: !prev.corridors }))}
-            className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
+            className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all whitespace-nowrap ${
               layers.corridors
                 ? 'bg-slate-700 text-white shadow-xs'
                 : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
@@ -666,7 +666,7 @@ export default function MapplsGISMap({
           <button
             onClick={handleRecenter}
             title="Reset Map to Regional NER View"
-            className="px-2.5 py-1 rounded-md bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 text-xs font-semibold transition-all"
+            className="px-2.5 py-1 rounded-md bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 text-xs font-semibold transition-all whitespace-nowrap"
           >
             ↺ Recenter
           </button>
@@ -677,8 +677,8 @@ export default function MapplsGISMap({
       <div className="relative w-full">
         <div
           ref={mapContainerRef}
-          className="w-full h-[520px] md:h-[580px] bg-slate-100 relative z-0"
-          style={{ minHeight: '480px' }}
+          className="w-full h-[380px] sm:h-[480px] md:h-[580px] bg-slate-100 relative z-0"
+          style={{ minHeight: '340px' }}
         />
 
         {/* Floating Active Route Projection HUD */}

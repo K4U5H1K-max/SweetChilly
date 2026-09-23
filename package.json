@@ -10,7 +10,7 @@
     "dev:full": "concurrently -n \"SERVER,CLIENT\" -c \"blue,green\" \"node server/index.js\" \"vite\"",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node test/track4_acceptance.js && node test/voice_provider_abstraction.test.js && node test/webhook_state_machine.test.js && node test/sarvam_voice_provider.test.js && node test/api_integration.js && node test/vehicle_driver_phone_update.test.js && node test/phase2c_post_call_intelligence.test.js && node test/vehicle_repository.test.js && node test/frontend_hydration.test.js && node test/track4_persistent_vehicle.test.js && node test/phase3a_acceptance.test.js && node test/deployment_repository.test.js && node test/frontend_deployment_ui.test.js && node test/phase3b_acceptance.test.js && node test/auth_security.test.js && node test/frontend_routing_auth_ui.test.js && node test/ownership_access_control.test.js && node test/user_portal_acceptance.test.js && node test/cross_portal_sync_acceptance.test.js && node test/intelligence_incidents_track4_acceptance.test.js && node test/phase3i_full_system_acceptance.test.js"
+    "test": "node test/track4_acceptance.js && node test/voice_provider_abstraction.test.js && node test/webhook_state_machine.test.js && node test/sarvam_voice_provider.test.js && node test/api_integration.js && node test/vehicle_driver_phone_update.test.js && node test/phase2c_post_call_intelligence.test.js && node test/vehicle_repository.test.js && node test/frontend_hydration.test.js && node test/track4_persistent_vehicle.test.js && node test/phase3a_acceptance.test.js && node test/deployment_repository.test.js && node test/frontend_deployment_ui.test.js && node test/phase3b_acceptance.test.js && node test/auth_security.test.js && node test/frontend_routing_auth_ui.test.js && node test/ownership_access_control.test.js && node test/user_portal_acceptance.test.js && node test/cross_portal_sync_acceptance.test.js && node test/intelligence_incidents_track4_acceptance.test.js && node test/phase3i_full_system_acceptance.test.js && node test/pwa_manifest_mobile.test.js && node test/real_device_pwa_acceptance.test.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -31,6 +31,7 @@
     "concurrently": "^10.0.5",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
-    "vite": "^6.0.7"
+    "vite": "^6.0.7",
+    "vite-plugin-pwa": "^1.3.0"
   }
 }

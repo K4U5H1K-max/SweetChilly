@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import UserDeployModal from './UserDeployModal';
 import UserDeploymentDetailsModal from './UserDeploymentDetailsModal';
+import UserReportIncidentModal from './UserReportIncidentModal';
+import StatusChip from '../common/StatusChip';
 
 export default function UserDeploymentsView({ onOpenDeployModal }) {
   const {
@@ -17,6 +19,7 @@ export default function UserDeploymentsView({ onOpenDeployModal }) {
   const [activeTab, setActiveTab] = useState('ACTIVE'); // 'ACTIVE' | 'HISTORY'
   const [selectedDeployment, setSelectedDeployment] = useState(null);
   const [deployModalOpen, setDeployModalOpen] = useState(false);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState(null);
   const [actionError, setActionError] = useState(null);
   const [actionSuccess, setActionSuccess] = useState(null);
@@ -62,270 +65,241 @@ export default function UserDeploymentsView({ onOpenDeployModal }) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 font-sans">
       {/* Top Banner */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-heading font-bold text-slate-900">Operator Transport Missions</h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Track active corridor deployments, confirm delivery completions, and inspect historical journey logs.
-          </p>
+      <div className="bg-white border border-slate-200/90 rounded-xl p-4 shadow-card">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-3">
+          <div>
+            <h2 className="text-sm font-heading font-bold text-[#0B1220]">Operator Transport Missions</h2>
+            <p className="text-[11px] text-slate-500">Live corridor journeys, delivery confirmations, and mission logs</p>
+          </div>
+
+          <button
+            onClick={() => (onOpenDeployModal ? onOpenDeployModal() : setDeployModalOpen(true))}
+            disabled={availableVehicles.length === 0}
+            className="px-3.5 py-1.5 bg-[#2563EB] hover:bg-blue-700 disabled:opacity-50 text-white font-bold text-xs rounded-lg shadow-xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0 touch-target"
+          >
+            <span>⚡</span>
+            <span>Dispatch Journey ({availableVehicles.length} Ready)</span>
+          </button>
         </div>
 
-        <button
-          onClick={() => (onOpenDeployModal ? onOpenDeployModal() : setDeployModalOpen(true))}
-          disabled={availableVehicles.length === 0}
-          className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-xs rounded-xl shadow-xs hover:shadow-md transition-all flex items-center gap-2 cursor-pointer shrink-0"
-          title={availableVehicles.length === 0 ? 'No available vehicles to deploy' : 'Deploy available vehicle'}
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-          </svg>
-          <span>Dispatch New Journey ({availableVehicles.length} available)</span>
-        </button>
+        {/* Segmented Tab Controls */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setActiveTab('ACTIVE')}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all touch-target sm:min-h-0 sm:min-w-0 ${
+              activeTab === 'ACTIVE'
+                ? 'bg-[#2563EB] text-white shadow-xs'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            Active Journeys ({activeDeployments.length})
+          </button>
+
+          <button
+            onClick={() => setActiveTab('HISTORY')}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all touch-target sm:min-h-0 sm:min-w-0 ${
+              activeTab === 'HISTORY'
+                ? 'bg-[#2563EB] text-white shadow-xs'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            Past Mission History ({deploymentHistory.length})
+          </button>
+        </div>
       </div>
 
       {/* Notifications */}
       {actionError && (
-        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <svg className="w-4 h-4 shrink-0 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span>{actionError}</span>
-          </div>
-          <button onClick={() => setActionError(null)} className="text-rose-500 hover:text-rose-700 font-bold ml-4">✕</button>
+        <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center justify-between">
+          <span>{actionError}</span>
+          <button onClick={() => setActionError(null)} className="font-bold text-rose-700 ml-2">✕</button>
         </div>
       )}
-
       {actionSuccess && (
-        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <svg className="w-4 h-4 shrink-0 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-            <span>{actionSuccess}</span>
-          </div>
-          <button onClick={() => setActionSuccess(null)} className="text-emerald-500 hover:text-emerald-700 font-bold ml-4">✕</button>
+        <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs flex items-center justify-between">
+          <span>{actionSuccess}</span>
+          <button onClick={() => setActionSuccess(null)} className="font-bold text-emerald-700 ml-2">✕</button>
         </div>
       )}
 
-      {/* Navigation Sub-Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
-        <button
-          onClick={() => setActiveTab('ACTIVE')}
-          className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-2 ${
-            activeTab === 'ACTIVE'
-              ? 'bg-blue-600 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <span>Active Deployments</span>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-            activeTab === 'ACTIVE' ? 'bg-blue-700 text-white' : 'bg-slate-200 text-slate-700'
-          }`}>
-            {activeDeployments.length}
-          </span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('HISTORY')}
-          className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-2 ${
-            activeTab === 'HISTORY'
-              ? 'bg-blue-600 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <span>Journey History</span>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-            activeTab === 'HISTORY' ? 'bg-blue-700 text-white' : 'bg-slate-200 text-slate-700'
-          }`}>
-            {deploymentHistory.length}
-          </span>
-        </button>
-      </div>
-
-      {/* Content Area */}
-      {deploymentsLoading ? (
-        <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center text-slate-400">
-          <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-          <span className="text-xs font-semibold">Hydrating journeys from backend...</span>
-        </div>
-      ) : activeTab === 'ACTIVE' ? (
-        /* Active Deployments Grid */
-        activeDeployments.length === 0 ? (
-          <div className="bg-white border border-dashed border-slate-300 rounded-2xl p-12 text-center">
-            <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center mx-auto mb-3">
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
+      {/* ==================== ACTIVE JOURNEYS (Driver Mode - Reference Screen 7) ==================== */}
+      {activeTab === 'ACTIVE' && (
+        <div>
+          {deploymentsLoading ? (
+            <div className="bg-white border border-slate-200 rounded-xl p-10 text-center text-slate-400">
+              <div className="w-8 h-8 border-2 border-[#2563EB] border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+              <span className="text-xs font-semibold">Loading active journeys...</span>
             </div>
-            <h3 className="text-base font-heading font-bold text-slate-800">No Active Journeys Underway</h3>
-            <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-5">
-              All your registered vehicles are currently stationed at regional hubs. Dispatch a journey to start corridor transport.
-            </p>
-            {availableVehicles.length > 0 && (
-              <button
-                onClick={() => setDeployModalOpen(true)}
-                className="px-4 py-2 bg-emerald-600 text-white font-semibold text-xs rounded-xl shadow-xs hover:bg-emerald-700 transition-colors"
-              >
-                Dispatch First Journey
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {activeDeployments.map((d) => (
-              <div
-                key={d.id}
-                className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-start justify-between gap-2 mb-4">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-xs text-slate-900 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
-                          {d.vehiclePlate || d.vehicleId}
-                        </span>
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                          d.status === 'ACTIVE'
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            : 'bg-amber-50 text-amber-700 border border-amber-200'
-                        }`}>
-                          {d.status}
-                        </span>
-                        {d.priority === 'HIGH' || d.priority === 'EMERGENCY' ? (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                            {d.priority}
-                          </span>
-                        ) : null}
+          ) : activeDeployments.length === 0 ? (
+            <div className="bg-white border border-dashed border-slate-300 rounded-xl p-10 text-center">
+              <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center mx-auto mb-2">
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </div>
+              <h3 className="text-sm font-bold text-slate-800">No Active Missions In Transit</h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-4">
+                {availableVehicles.length > 0
+                  ? `You have ${availableVehicles.length} vehicle(s) ready at depot for corridor dispatch.`
+                  : 'Enrol a vehicle to start assigning transport missions.'}
+              </p>
+              {availableVehicles.length > 0 && (
+                <button
+                  onClick={() => (onOpenDeployModal ? onOpenDeployModal() : setDeployModalOpen(true))}
+                  className="px-4 py-2 bg-[#2563EB] text-white font-semibold text-xs rounded-lg shadow-xs hover:bg-blue-700"
+                >
+                  ⚡ Dispatch First Journey
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {activeDeployments.map((d) => (
+                <div
+                  key={d.id}
+                  className="bg-white border border-slate-200/90 rounded-xl p-4 sm:p-5 shadow-card hover:shadow-card-hover transition-all space-y-3"
+                >
+                  {/* Top Vehicle & Cargo Row (Reference Screen 7) */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 shrink-0">
+                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                        </svg>
                       </div>
-                      <h3 className="font-heading font-bold text-base text-slate-800 mt-2">
-                        {d.origin} $\rightarrow$ {d.destination}
-                      </h3>
-                      <p className="text-xs font-mono text-blue-600">{d.assignedCorridor || 'NER Transit Corridor'}</p>
+                      <div className="truncate">
+                        <span className="text-[11px] font-medium text-slate-500 block">Active Transport Mission</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-sm text-[#0B1220]">
+                            {d.vehiclePlate || d.vehicleId}
+                          </span>
+                          <span className="text-xs text-slate-400">•</span>
+                          <span className="text-xs font-semibold text-slate-700 truncate">{d.cargo}</span>
+                        </div>
+                        <p className="text-[11px] font-mono text-slate-500 mt-0.5">
+                          Corridor: {d.assignedCorridor || 'Direct Arterial'}
+                        </p>
+                      </div>
                     </div>
+
+                    <StatusChip variant="info" size="md">
+                      {d.status || 'ACTIVE'}
+                    </StatusChip>
+                  </div>
+
+                  {/* Next Destination Highlight Card (Reference Screen 7) */}
+                  <div className="bg-slate-50/90 rounded-xl p-3.5 border border-slate-200/80">
+                    <span className="text-[10px] font-bold text-slate-500 font-mono uppercase tracking-wider block">
+                      Next Destination
+                    </span>
+                    <div className="text-base sm:text-lg font-bold font-heading text-[#0B1220] mt-0.5">
+                      {d.destination}
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-slate-600 mt-1">
+                      <span className="flex items-center gap-1 font-semibold text-emerald-700">
+                        <span>→</span>
+                        <span>{d.origin} to {d.destination}</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Primary Touch Action Buttons (Reference Screen 7) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                    <button
+                      onClick={() => handleComplete(d)}
+                      disabled={actionLoadingId === d.id}
+                      className="py-2.5 px-3 bg-[#16A34A] hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs flex items-center justify-center gap-1.5 touch-target cursor-pointer"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span>Complete Mission</span>
+                    </button>
+
+                    <button
+                      onClick={() => setReportModalOpen(true)}
+                      className="py-2.5 px-3 bg-[#F59E0B] hover:bg-amber-600 text-white font-bold text-xs rounded-xl shadow-xs flex items-center justify-center gap-1.5 touch-target cursor-pointer"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      <span>Report Road Issue</span>
+                    </button>
 
                     <button
                       onClick={() => setSelectedDeployment(d)}
-                      className="text-xs font-semibold text-slate-500 hover:text-slate-800 bg-slate-50 hover:bg-slate-100 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                      className="py-2.5 px-3 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs rounded-xl shadow-xs flex items-center justify-center gap-1.5 touch-target cursor-pointer"
                     >
-                      Manifest
+                      <span>Details & Log →</span>
                     </button>
                   </div>
-
-                  <div className="space-y-2 py-3 border-y border-slate-100 my-3 text-xs">
-                    <div className="flex justify-between text-slate-600">
-                      <span className="text-slate-400">Cargo:</span>
-                      <span className="font-medium text-slate-800">{d.cargo}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-600">
-                      <span className="text-slate-400">Assigned Driver:</span>
-                      <span className="font-semibold text-slate-800">{d.driverName || 'Operator Assigned'}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-600">
-                      <span className="text-slate-400">Dispatch Time:</span>
-                      <span className="font-mono text-slate-700">{d.startTime ? new Date(d.startTime).toLocaleTimeString() : 'Recent'}</span>
-                    </div>
-                  </div>
                 </div>
-
-                <div className="pt-2 flex items-center justify-end gap-2">
-                  <button
-                    onClick={() => handleCancel(d)}
-                    disabled={actionLoadingId === d.id}
-                    className="px-3 py-1.5 text-xs font-semibold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
-                  >
-                    Cancel Journey
-                  </button>
-                  <button
-                    onClick={() => handleComplete(d)}
-                    disabled={actionLoadingId === d.id}
-                    className="px-4 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-xs hover:shadow-md transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                  >
-                    {actionLoadingId === d.id ? (
-                      <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                    ) : (
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                    )}
-                    <span>Complete Journey</span>
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )
-      ) : (
-        /* Deployment History Table */
-        deploymentHistory.length === 0 ? (
-          <div className="bg-white border border-dashed border-slate-300 rounded-2xl p-12 text-center">
-            <h3 className="text-base font-heading font-bold text-slate-800">No Journey History Recorded</h3>
-            <p className="text-xs text-slate-500 mt-1">Completed and cancelled transport missions will be logged here permanently.</p>
-          </div>
-        ) : (
-          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider">
-                  <tr>
-                    <th className="py-3 px-4">Journey ID</th>
-                    <th className="py-3 px-4">Vehicle</th>
-                    <th className="py-3 px-4">Route</th>
-                    <th className="py-3 px-4">Cargo</th>
-                    <th className="py-3 px-4">Driver</th>
-                    <th className="py-3 px-4">Status</th>
-                    <th className="py-3 px-4 text-right">Details</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {deploymentHistory.map((h) => (
-                    <tr key={h.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-4 font-mono font-bold text-slate-700">{h.id}</td>
-                      <td className="py-3 px-4 font-mono font-medium text-slate-900">{h.vehiclePlate || h.vehicleId}</td>
-                      <td className="py-3 px-4 font-medium text-slate-800">{h.origin} $\rightarrow$ {h.destination}</td>
-                      <td className="py-3 px-4 text-slate-600">{h.cargo}</td>
-                      <td className="py-3 px-4 text-slate-600">{h.driverName || 'Operator Assigned'}</td>
-                      <td className="py-3 px-4">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                          h.status === 'COMPLETED'
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            : 'bg-rose-50 text-rose-700 border border-rose-200'
-                        }`}>
-                          {h.status}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <button
-                          onClick={() => setSelectedDeployment(h)}
-                          className="text-xs font-semibold text-blue-600 hover:text-blue-800"
-                        >
-                          View
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              ))}
             </div>
-          </div>
-        )
+          )}
+        </div>
+      )}
+
+      {/* ==================== PAST MISSIONS HISTORY ==================== */}
+      {activeTab === 'HISTORY' && (
+        <div className="space-y-3">
+          {deploymentHistory.length === 0 ? (
+            <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-500 text-xs">
+              No historical missions completed yet.
+            </div>
+          ) : (
+            deploymentHistory.map((d) => (
+              <div
+                key={d.id}
+                className="bg-white border border-slate-200/90 rounded-xl p-4 shadow-card flex items-center justify-between gap-3 text-xs"
+              >
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono font-bold text-[#0B1220]">
+                      {d.vehiclePlate || d.vehicleId}
+                    </span>
+                    <StatusChip variant={d.status === 'COMPLETED' ? 'success' : 'warning'} size="sm">
+                      {d.status}
+                    </StatusChip>
+                  </div>
+                  <p className="text-slate-600 mt-1">
+                    {d.origin} → {d.destination} ({d.cargo})
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => setSelectedDeployment(d)}
+                  className="text-[#2563EB] font-bold hover:text-blue-800"
+                >
+                  Inspect →
+                </button>
+              </div>
+            ))
+          )}
+        </div>
       )}
 
       {/* Modals */}
+      {selectedDeployment && (
+        <UserDeploymentDetailsModal
+          isOpen={Boolean(selectedDeployment)}
+          deployment={selectedDeployment}
+          onClose={() => setSelectedDeployment(null)}
+        />
+      )}
+
       <UserDeployModal
         isOpen={deployModalOpen}
         onClose={() => setDeployModalOpen(false)}
-        onSuccess={() => setActionSuccess('Journey dispatched successfully!')}
+        onSuccess={() => setActionSuccess('New mission dispatched successfully.')}
       />
 
-      <UserDeploymentDetailsModal
-        isOpen={Boolean(selectedDeployment)}
-        deployment={selectedDeployment}
-        onClose={() => setSelectedDeployment(null)}
-        onComplete={handleComplete}
-        onCancel={handleCancel}
+      <UserReportIncidentModal
+        isOpen={reportModalOpen}
+        onClose={() => setReportModalOpen(false)}
+        onSuccess={() => setActionSuccess('Field incident report logged and broadcast successfully.')}
       />
     </div>
   );
