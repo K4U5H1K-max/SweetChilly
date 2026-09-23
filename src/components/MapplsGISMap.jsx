@@ -310,9 +310,18 @@ export default function MapplsGISMap({
     vehiclesLayerRef.current.clearLayers();
     vehicleMarkersMapRef.current.clear();
 
-    if (!layers.vehicles) return;
+    // Operational GIS map only displays vehicles with an active deployment
+    const activeVehicles = vehicles.filter((veh) => {
+      if (veh.hasActiveDeployment !== undefined) {
+        return Boolean(veh.hasActiveDeployment);
+      }
+      if (veh.deploymentStatus) {
+        return ['ACTIVE', 'DELAYED', 'PLANNED'].includes(veh.deploymentStatus);
+      }
+      return false;
+    });
 
-    vehicles.forEach((veh) => {
+    activeVehicles.forEach((veh) => {
       if (!veh.currentPos) return;
 
       const isSelected = selectedVehicleId === veh.id;

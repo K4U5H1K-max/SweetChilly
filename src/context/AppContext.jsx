@@ -63,16 +63,8 @@ export function AppProvider({ children }) {
       }
     } catch (err) {
       console.warn('[AppContext] Vehicle hydration failed:', err.message);
-      const isDev = Boolean(import.meta.env?.DEV);
       setVehiclesError(err.message || 'Failed to load vehicle fleet from backend.');
-
-      // Development / offline mode fallback:
-      if (isDev) {
-        console.info('[AppContext] Development fallback: initializing with demo INITIAL_VEHICLES.');
-        setVehicles(INITIAL_VEHICLES);
-      } else {
-        setVehicles([]);
-      }
+      setVehicles([]);
       setVehiclesLoading(false);
       return null;
     }
@@ -101,15 +93,8 @@ export function AppProvider({ children }) {
       }
     } catch (err) {
       console.warn('[AppContext] Deployment hydration failed:', err.message);
-      const isDev = Boolean(import.meta.env?.DEV);
       setDeploymentsError(err.message || 'Failed to load deployments from backend.');
-
-      if (isDev) {
-        console.info('[AppContext] Development fallback: initializing with demo INITIAL_NER_DEPLOYMENTS.');
-        setDeployments(INITIAL_NER_DEPLOYMENTS);
-      } else {
-        setDeployments([]);
-      }
+      setDeployments([]);
       setDeploymentsLoading(false);
       return null;
     }

@@ -5,14 +5,29 @@
  * Supports PostgreSQL with transparent fallback to in-memory store when DATABASE_URL is unset.
  */
 
-import { INITIAL_NER_VEHICLES } from './schema.js';
+import { INITIAL_NER_VEHICLES, resolveLocationCoordinates } from './schema.js';
 
 export class VehicleRepository {
   /**
    * @param {import('pg').Pool | null} [pool]
+   * @param {object} [options]
+   * @param {boolean} [options.seedDemo=false]
    */
-  constructor(pool = null) {
+  constructor(pool = null, { seedDemo = false } = {}) {
     this.pool = pool;
+    this.memoryStore = [];
+    if (seedDemo) {
+      this.seedDemoData();
+    }
+    this.deploymentRepo = null;
+    this.userRepo = null;
+  }
+
+  /**
+   * Explicit development/test helper to seed demonstration fleet into memory store.
+   * @returns {number}
+   */
+  seedDemoData() {
     const nowIso = new Date().toISOString();
     this.memoryStore = INITIAL_NER_VEHICLES.map((v) => ({
       ownerUserId: v.ownerUserId || null,
@@ -20,8 +35,7 @@ export class VehicleRepository {
       updatedAt: v.updatedAt || nowIso,
       ...v,
     }));
-    this.deploymentRepo = null;
-    this.userRepo = null;
+    return this.memoryStore.length;
   }
 
   /**
@@ -61,6 +75,17 @@ export class VehicleRepository {
         activeDep = await this.deploymentRepo.getActiveDeploymentByVehicleId(vehicle.id);
       }
       if (activeDep) {
+        const originLat = activeDep.originLat !== null && activeDep.originLat !== undefined
+          ? activeDep.originLat
+          : (resolveLocationCoordinates(activeDep.origin)?.lat ?? null);
+        const originLng = activeDep.originLng !== null && activeDep.originLng !== undefined
+          ? activeDep.originLng
+          : (resolveLocationCoordinates(activeDep.origin)?.lng ?? null);
+
+        const currentPos = (originLat !== null && originLng !== null)
+          ? { lat: originLat, lng: originLng }
+          : vehicle.currentPos;
+
         return {
           ...vehicle,
           origin: activeDep.origin || vehicle.origin,
@@ -68,9 +93,18 @@ export class VehicleRepository {
           assignedCorridor: activeDep.assignedCorridor || vehicle.assignedCorridor,
           cargo: activeDep.cargo || vehicle.cargo,
           priority: activeDep.priority || vehicle.priority,
+          currentPos,
           hasActiveDeployment: true,
           activeDeploymentId: activeDep.id,
           deploymentStatus: activeDep.status,
+          originLat,
+          originLng,
+          destinationLat: activeDep.destinationLat !== null && activeDep.destinationLat !== undefined
+            ? activeDep.destinationLat
+            : (resolveLocationCoordinates(activeDep.destination)?.lat ?? null),
+          destinationLng: activeDep.destinationLng !== null && activeDep.destinationLng !== undefined
+            ? activeDep.destinationLng
+            : (resolveLocationCoordinates(activeDep.destination)?.lng ?? null),
         };
       }
     } catch (err) {
@@ -249,8 +283,19 @@ export class VehicleRepository {
    * @returns {Promise<object>}
    */
   async createVehicle(v) {
-    const lat = v.currentPos?.lat !== undefined ? v.currentPos.lat : (v.latitude !== undefined ? v.latitude : 26.1445);
-    const lng = v.currentPos?.lng !== undefined ? v.currentPos.lng : (v.longitude !== undefined ? v.longitude : 91.7362);
+    const rawOrigin = v.origin || (v.currentLocationName ? v.currentLocationName.replace(/\s+Logistics\s+Hub|\s+Hub/i, '').trim() : null);
+    const resolvedOriginCoords = resolveLocationCoordinates(rawOrigin || v.currentLocationName);
+
+    const lat = v.currentPos?.lat !== undefined
+      ? v.currentPos.lat
+      : (v.currentLocationLat !== undefined
+          ? v.currentLocationLat
+          : (v.latitude !== undefined ? v.latitude : (resolvedOriginCoords?.lat ?? 26.1445)));
+    const lng = v.currentPos?.lng !== undefined
+      ? v.currentPos.lng
+      : (v.currentLocationLng !== undefined
+          ? v.currentLocationLng
+          : (v.longitude !== undefined ? v.longitude : (resolvedOriginCoords?.lng ?? 91.7362)));
 
     const vehicleId = v.id || `VEH-NER-${Date.now().toString(36).toUpperCase()}`;
     const ownerUserId = v.ownerUserId || null;
@@ -259,11 +304,11 @@ export class VehicleRepository {
     const type = v.type || 'Standard Cargo Truck';
     const capacity = v.capacity || '5 Ton';
     const cargo = v.cargo || 'General Freight';
-    const status = v.status || 'IN_TRANSIT';
+    const status = v.status || 'AVAILABLE';
     const speedKmH = Number(v.speedKmH) || 45;
-    const origin = v.origin || 'Guwahati';
-    const destination = v.destination || 'Silchar';
-    const assignedCorridor = v.assignedCorridor || `${origin} - ${destination}`;
+    const origin = rawOrigin || (v.currentLocationName ? v.currentLocationName.replace(/\s+Logistics\s+Hub|\s+Hub/i, '').trim() : null) || 'Unassigned Depot';
+    const destination = v.destination || null;
+    const assignedCorridor = v.assignedCorridor || (destination ? `${origin} - ${destination}` : null);
     const delayEstMinutes = Number(v.delayEstMinutes) || 0;
     const priority = v.priority || 'MEDIUM';
     const driverName = v.driverName || 'Driver';

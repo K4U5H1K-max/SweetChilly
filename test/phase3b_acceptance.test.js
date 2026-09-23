@@ -57,8 +57,8 @@ console.log('================================================================\n'
 
 async function runPhase3BAcceptanceSuite() {
   // 1. Setup Isolated Repositories & Link Deployment Projection
-  const vehRepo = new VehicleRepository(null);
-  const depRepo = new DeploymentRepository(null);
+  const vehRepo = new VehicleRepository(null, { seedDemo: true });
+  const depRepo = new DeploymentRepository(null, { seedDemo: true });
   vehRepo.setDeploymentRepository(depRepo);
 
   // Bind voiceService to our test repository

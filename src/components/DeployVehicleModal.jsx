@@ -39,17 +39,27 @@ export default function DeployVehicleModal({
     );
   }, [selectableVehicles, selectedVehicleId]);
 
-  // Synchronize vehicle selection on open
+  // Synchronize vehicle selection and origin on open/change
   useEffect(() => {
     if (isOpen) {
       if (preselectedVehicleId) {
         setSelectedVehicleId(preselectedVehicleId);
-      } else if (selectableVehicles.length > 0) {
+      } else if (selectableVehicles.length > 0 && !selectedVehicleId) {
         setSelectedVehicleId(selectableVehicles[0].id);
       }
       setErrorMessage('');
     }
   }, [isOpen, preselectedVehicleId, selectableVehicles]);
+
+  // When selected vehicle changes, derive origin from vehicle's location if available
+  useEffect(() => {
+    if (selectedVehicle) {
+      const vLoc = (selectedVehicle.origin || selectedVehicle.currentLocationName || '').replace(/\s+Logistics\s+Hub|\s+Hub/i, '').trim();
+      if (vLoc && NER_CITIES.includes(vLoc)) {
+        setOrigin(vLoc);
+      }
+    }
+  }, [selectedVehicle]);
 
   // Mask driver phone for GovTech privacy compliance
   const maskedPhone = useMemo(() => {

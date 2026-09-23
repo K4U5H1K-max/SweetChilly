@@ -8,6 +8,7 @@ import { voiceService } from './voice/voiceService.js';
 import { validateFlagRequest, validateTriggerRequest, validateAndNormalizePhone, maskPhone } from './voice/securityGuardrails.js';
 import { processStatusWebhook } from './voice/webhookHandler.js';
 import { getPool, isDatabaseConfigured, testConnection, initializeDatabase, vehicleRepository, deploymentRepository, userRepository } from './db/index.js';
+import { resolveLocationCoordinates, NER_HUB_LOCATIONS } from './db/schema.js';
 import { validateAndNormalizeEmail, validatePassword, hashPassword, verifyPassword, generateToken, toSafeUser, getJwtSecret } from './auth/authUtils.js';
 import { authenticateUser, requireRole, optionalAuth } from './auth/authMiddleware.js';
 
@@ -205,192 +206,7 @@ let alerts = [
 //   migrates those mutations to repository/database writes.
 // - Phase 3A.3 will remove/directly replace this synchronous mutation dependency.
 // =========================================================================
-let vehicles = [
-  {
-    id: 'VEH-NER-101',
-    regNumber: 'AS-01-GC-4482',
-    name: 'Assam Pharma-Logistics MedTruck 01',
-    type: 'Refrigerated Medical Van',
-    capacity: '3.5 Ton',
-    cargo: 'Vaccines, Blood Plasma & Insulin',
-    status: 'IN_TRANSIT',
-    speedKmH: 48,
-    origin: 'Guwahati',
-    destination: 'Silchar',
-    currentPos: { lat: 25.4200, lng: 92.1500 },
-    assignedCorridor: 'NH-6',
-    delayEstMinutes: 180,
-    priority: 'EMERGENCY_CRITICAL',
-    driverName: 'B. Kalita',
-    driverPhone: '+91-98640-12345',
-    isFlagged: false,
-    flagReason: null,
-    safetyStatus: 'NOT_CHECKED',
-    lastSafetyCheck: null,
-    activeCallId: null,
-  },
-  {
-    id: 'VEH-NER-204',
-    regNumber: 'ML-05-E-9012',
-    name: 'Meghalaya Essential Food Supply 04',
-    type: 'Heavy Cargo Truck',
-    capacity: '12 Ton',
-    cargo: 'Rice & Fortified Grains',
-    status: 'IN_TRANSIT',
-    speedKmH: 54,
-    origin: 'Guwahati',
-    destination: 'Shillong',
-    currentPos: { lat: 25.8500, lng: 91.8100 },
-    assignedCorridor: 'GS Road / NH-27',
-    delayEstMinutes: 0,
-    priority: 'HIGH',
-    driverName: 'S. Marak',
-    driverPhone: '+91-94361-23456',
-    isFlagged: false,
-    flagReason: null,
-    safetyStatus: 'NOT_CHECKED',
-    lastSafetyCheck: null,
-    activeCallId: null,
-  },
-  {
-    id: 'VEH-NER-309',
-    regNumber: 'TR-01-B-3319',
-    name: 'Tripura POL Tanker Convoy #09',
-    type: 'POL Petroleum Tanker (18KL)',
-    capacity: '18 KL',
-    cargo: 'High-Speed Diesel (HSD) & Petrol',
-    status: 'IN_TRANSIT',
-    speedKmH: 38,
-    origin: 'Guwahati',
-    destination: 'Agartala',
-    currentPos: { lat: 24.9500, lng: 92.4000 },
-    assignedCorridor: 'NH-6 / NH-8',
-    delayEstMinutes: 240,
-    priority: 'HIGH',
-    driverName: 'R. Debbarma',
-    driverPhone: '+91-98620-34567',
-    isFlagged: false,
-    flagReason: null,
-    safetyStatus: 'NOT_CHECKED',
-    lastSafetyCheck: null,
-    activeCallId: null,
-  },
-  {
-    id: 'VEH-NER-412',
-    regNumber: 'MN-01-AA-7821',
-    name: 'Manipur Valley Oxygen & Medical LCV',
-    type: 'Cryogenic Liquid Oxygen Tanker',
-    capacity: '4.0 Ton',
-    cargo: 'Liquid Medical Oxygen (LMO)',
-    status: 'REROUTED',
-    speedKmH: 42,
-    origin: 'Silchar',
-    destination: 'Imphal',
-    currentPos: { lat: 24.8100, lng: 92.9500 },
-    assignedCorridor: 'NH-37 (Via Jiribam Transshipment)',
-    delayEstMinutes: 90,
-    priority: 'EMERGENCY_CRITICAL',
-    driverName: 'N. Singh',
-    driverPhone: '+91-98561-45678',
-    isFlagged: false,
-    flagReason: null,
-    safetyStatus: 'NOT_CHECKED',
-    lastSafetyCheck: null,
-    activeCallId: null,
-  },
-  {
-    id: 'VEH-NER-515',
-    regNumber: 'NL-07-C-5541',
-    name: 'Nagaland Disaster Relief Express',
-    type: 'Container Freight Truck',
-    capacity: '10 Ton',
-    cargo: 'Dry Rations, Tarpaulins & Water Purification Kits',
-    status: 'IN_TRANSIT',
-    speedKmH: 60,
-    origin: 'Guwahati',
-    destination: 'Kohima',
-    currentPos: { lat: 26.3100, lng: 93.4200 },
-    assignedCorridor: 'NH-27 / NH-29',
-    delayEstMinutes: 30,
-    priority: 'HIGH',
-    driverName: 'K. Angami',
-    driverPhone: '+91-94360-56789',
-    isFlagged: false,
-    flagReason: null,
-    safetyStatus: 'NOT_CHECKED',
-    lastSafetyCheck: null,
-    activeCallId: null,
-  },
-  {
-    id: 'VEH-NER-602',
-    regNumber: 'MZ-01-A-1120',
-    name: 'Mizoram High-Altitude LCV Convoy',
-    type: 'Medium Duty Truck (4x4)',
-    capacity: '6 Ton',
-    cargo: 'Baby Food & Pharmaceutical Supplies',
-    status: 'IDLE_STAGING',
-    speedKmH: 0,
-    origin: 'Silchar',
-    destination: 'Aizawl',
-    currentPos: { lat: 24.8170, lng: 92.7960 },
-    assignedCorridor: 'NH-306 / NH-54',
-    delayEstMinutes: 0,
-    priority: 'HIGH',
-    driverName: 'L. Sailo',
-    driverPhone: '+91-98625-67890',
-    isFlagged: false,
-    flagReason: null,
-    safetyStatus: 'NOT_CHECKED',
-    lastSafetyCheck: null,
-    activeCallId: null,
-  },
-  {
-    id: 'VEH-NER-708',
-    regNumber: 'AR-01-D-8890',
-    name: 'Arunachal Strategic Border Supply #08',
-    type: 'Heavy 6x6 All-Terrain Hauler',
-    capacity: '15 Ton',
-    cargo: 'Heavy Engineering Spares & Bridge Panels',
-    status: 'IN_TRANSIT',
-    speedKmH: 35,
-    origin: 'Tezpur',
-    destination: 'Itanagar',
-    currentPos: { lat: 26.8500, lng: 93.2500 },
-    assignedCorridor: 'NH-15 / NH-415',
-    delayEstMinutes: 0,
-    priority: 'HIGH',
-    driverName: 'T. Riba',
-    driverPhone: '+91-94362-78901',
-    isFlagged: false,
-    flagReason: null,
-    safetyStatus: 'NOT_CHECKED',
-    lastSafetyCheck: null,
-    activeCallId: null,
-  },
-  {
-    id: 'VEH-NER-819',
-    regNumber: 'SK-01-J-2244',
-    name: 'Sikkim Hill Corridor Express',
-    type: 'Multi-Axle Mountain Truck',
-    capacity: '8 Ton',
-    cargo: 'Emergency Hospital Oxygen Cylinders',
-    status: 'IN_TRANSIT',
-    speedKmH: 40,
-    origin: 'Siliguri',
-    destination: 'Gangtok',
-    currentPos: { lat: 27.0500, lng: 88.4700 },
-    assignedCorridor: 'NH-10 (Sevoke-Rongpo Corridor)',
-    delayEstMinutes: 45,
-    priority: 'HIGH',
-    driverName: 'D. Bhutia',
-    driverPhone: '+91-97330-89012',
-    isFlagged: false,
-    flagReason: null,
-    safetyStatus: 'NOT_CHECKED',
-    lastSafetyCheck: null,
-    activeCallId: null,
-  },
-];
+let vehicles = [];
 
 const weather = [
   { district: 'East Jaintia Hills', state: 'Meghalaya', condition: 'Torrential Rain & Monsoon Downpour', rainfallMm: 165, alertLevel: 'RED', windKmH: 45 },
@@ -1109,11 +925,15 @@ app.post('/api/deployments', authenticateUser, async (req, res) => {
 
     const newDep = await deploymentRepository.createDeployment({
       vehicleId,
-      origin,
-      destination,
+      origin: String(origin).trim(),
+      destination: String(destination).trim(),
       assignedCorridor: assignedCorridor || `${origin} - ${destination}`,
       cargo: cargo || vehicle.cargo || 'General Relief Cargo',
       priority: priority || vehicle.priority || 'MEDIUM',
+      originLat: req.body.originLat,
+      originLng: req.body.originLng,
+      destinationLat: req.body.destinationLat,
+      destinationLng: req.body.destinationLng,
       status: status || 'ACTIVE',
     });
 
@@ -1412,38 +1232,47 @@ app.post('/api/voice/webhooks/speech', async (req, res) => {
 // ==========================================
 // Route Planning & Disruption Intelligence
 // ==========================================
-const NER_HUB_LOCATIONS = {
-  Guwahati: { lat: 26.1445, lng: 91.7362 },
-  Shillong: { lat: 25.5788, lng: 91.8933 },
-  Silchar: { lat: 24.8170, lng: 92.7960 },
-  Dimapur: { lat: 25.9068, lng: 93.7273 },
-  Imphal: { lat: 24.8170, lng: 93.9368 },
-  Itanagar: { lat: 27.0844, lng: 93.6053 },
-  Aizawl: { lat: 23.7271, lng: 92.7176 },
-  Agartala: { lat: 23.8315, lng: 91.2868 },
-  Gangtok: { lat: 27.3389, lng: 88.6065 },
-  Kohima: { lat: 25.6751, lng: 94.1086 },
-  Tezpur: { lat: 26.6338, lng: 92.7926 },
-  Jorhat: { lat: 26.7509, lng: 94.2037 },
-};
 
 app.post('/api/routes/plan', async (req, res) => {
   try {
     const {
-      origin = 'Guwahati',
-      destination = 'Silchar',
+      origin,
+      destination,
       vehicleType = 'Heavy Truck (10-Wheeler)',
       cargo = 'Relief Supplies & Medicines',
       priority = 'HIGH',
       avoidDisruptions = true,
-    } = req.body;
+      originCoords: clientOriginCoords,
+      destCoords: clientDestCoords,
+    } = req.body || {};
 
-    const originCoords = NER_HUB_LOCATIONS[origin] || NER_HUB_LOCATIONS['Guwahati'];
-    const destCoords = NER_HUB_LOCATIONS[destination] || NER_HUB_LOCATIONS['Silchar'];
+    if (!origin || !String(origin).trim()) {
+      return res.status(400).json({ success: false, message: 'Origin location is required for route planning.' });
+    }
+    if (!destination || !String(destination).trim()) {
+      return res.status(400).json({ success: false, message: 'Destination location is required for route planning.' });
+    }
 
-    const isSonapurAvoided = (origin === 'Guwahati' && destination === 'Silchar') ||
-      (origin === 'Shillong' && destination === 'Silchar') ||
-      (origin === 'Guwahati' && destination === 'Agartala');
+    const cleanOrigin = String(origin).trim();
+    const cleanDestination = String(destination).trim();
+
+    if (cleanOrigin.toLowerCase() === cleanDestination.toLowerCase()) {
+      return res.status(400).json({ success: false, message: 'Origin and Destination must be different locations.' });
+    }
+
+    const originCoords = clientOriginCoords || resolveLocationCoordinates(cleanOrigin);
+    const destCoords = clientDestCoords || resolveLocationCoordinates(cleanDestination);
+
+    if (!originCoords || !destCoords) {
+      return res.status(400).json({
+        success: false,
+        message: `Unable to resolve coordinates for route: ${!originCoords ? `unknown origin '${cleanOrigin}'` : ''} ${!destCoords ? `unknown destination '${cleanDestination}'` : ''}`.trim(),
+      });
+    }
+
+    const isSonapurAvoided = (cleanOrigin === 'Guwahati' && cleanDestination === 'Silchar') ||
+      (cleanOrigin === 'Shillong' && cleanDestination === 'Silchar') ||
+      (cleanOrigin === 'Guwahati' && cleanDestination === 'Agartala');
 
     const activeCriticalIncidents = incidents.filter((i) => i.severity === 'CRITICAL' || i.severity === 'HIGH');
     const criticalWeather = weather.filter((w) => w.alertLevel === 'RED' || w.alertLevel === 'AMBER').map((w) => `${w.district} (${w.condition})`);
@@ -1453,7 +1282,7 @@ app.post('/api/routes/plan', async (req, res) => {
     if (groqKey && groqKey !== 'mock-groq-api-key') {
       try {
         const groqPrompt = `You are the NER Disruption-Aware Tactical Route AI for the Brahmaputra Strategic Logistics Corridor.
-Plan the optimal route from ${origin} to ${destination} for a ${vehicleType} carrying ${cargo} with priority ${priority}.
+Plan the optimal route from ${cleanOrigin} to ${cleanDestination} for a ${vehicleType} carrying ${cargo} with priority ${priority}.
 Active Corridor Incidents: ${JSON.stringify(activeCriticalIncidents.map(i => ({ title: i.title, loc: i.location, sev: i.severity })))}
 Critical Weather: ${criticalWeather.join(', ') || 'Normal'}
 Avoid Disruptions: ${avoidDisruptions}
@@ -1470,8 +1299,8 @@ Respond STRICTLY in JSON:
   "summary": "string tactical summary",
   "status": "OPTIMAL_CALCULATED",
   "waypoints": [
-    {"name": "${origin} Hub", "lat": ${originCoords.lat}, "lng": ${originCoords.lng}, "type": "ORIGIN", "note": "Departure terminal"},
-    {"name": "${destination} Terminal", "lat": ${destCoords.lat}, "lng": ${destCoords.lng}, "type": "DESTINATION", "note": "Delivery point"}
+    {"name": "${cleanOrigin} Hub", "lat": ${originCoords.lat}, "lng": ${originCoords.lng}, "type": "ORIGIN", "note": "Departure terminal"},
+    {"name": "${cleanDestination} Terminal", "lat": ${destCoords.lat}, "lng": ${destCoords.lng}, "type": "DESTINATION", "note": "Delivery point"}
   ]
 }`;
         const controller = new AbortController();
@@ -1502,34 +1331,34 @@ Respond STRICTLY in JSON:
     }
 
     const defaultWaypoints = [
-      { name: `${origin} Central Hub`, lat: originCoords.lat, lng: originCoords.lng, type: 'ORIGIN', note: 'Primary dispatch point' },
+      { name: `${cleanOrigin} Central Hub`, lat: originCoords.lat, lng: originCoords.lng, type: 'ORIGIN', note: 'Primary dispatch point' },
     ];
 
     if (isSonapurAvoided && avoidDisruptions) {
-      if (origin === 'Guwahati' && destination === 'Silchar') {
+      if (cleanOrigin === 'Guwahati' && cleanDestination === 'Silchar') {
         defaultWaypoints.push({ name: 'Nagaon Bypass Junction (NH-27)', lat: 26.3450, lng: 92.6840, type: 'TRANSIT', note: 'Detour entry avoiding NH-6 Sonapur bottleneck' });
         defaultWaypoints.push({ name: 'Haflong Mountain Highway Staging (NH-627)', lat: 25.1667, lng: 93.0167, type: 'TRANSIT', note: 'Safe terrain corridor' });
         defaultWaypoints.push({ name: 'Silchar Distribution Depot', lat: 24.8170, lng: 92.7960, type: 'TRANSIT', note: 'Barak Valley cross-docking junction' });
       }
-    } else if (origin !== destination) {
+    } else if (cleanOrigin !== cleanDestination) {
       // Midpoint interpolation
       const midLat = (originCoords.lat + destCoords.lat) / 2;
       const midLng = (originCoords.lng + destCoords.lng) / 2;
-      defaultWaypoints.push({ name: 'Mid-Corridor Staging Waypoint', lat: Number(midLat.toFixed(4)), lng: Number(midLng.toFixed(4)), type: 'TRANSIT', note: 'Monitored highway checkpoint' });
+      defaultWaypoints.push({ name: `${cleanOrigin} - ${cleanDestination} Transit Checkpoint`, lat: Number(midLat.toFixed(4)), lng: Number(midLng.toFixed(4)), type: 'TRANSIT', note: 'Monitored highway checkpoint' });
     }
 
-    defaultWaypoints.push({ name: `${destination} Terminal Depot`, lat: destCoords.lat, lng: destCoords.lng, type: 'DESTINATION', note: 'Cargo delivery terminal' });
+    defaultWaypoints.push({ name: `${cleanDestination} Terminal Depot`, lat: destCoords.lat, lng: destCoords.lng, type: 'DESTINATION', note: 'Cargo delivery terminal' });
 
     const generatedRoute = {
       routeId: `RTE-NER-${Date.now().toString(36).toUpperCase()}`,
-      origin,
-      destination,
+      origin: cleanOrigin,
+      destination: cleanDestination,
       vehicleType,
       cargo,
       priority,
       avoidDisruptions,
       status: aiPlan?.status || 'OPTIMAL_CALCULATED',
-      recommendedCorridor: aiPlan?.recommendedCorridor || (isSonapurAvoided ? `${origin} → Nagaon (NH-27) → Haflong Bypass → ${destination}` : `${origin} → ${destination} Direct Arterial`),
+      recommendedCorridor: aiPlan?.recommendedCorridor || (isSonapurAvoided ? `${cleanOrigin} → Nagaon (NH-27) → Haflong Bypass → ${cleanDestination}` : `${cleanOrigin} → ${cleanDestination} Direct Arterial`),
       distanceKm: typeof aiPlan?.distanceKm === 'number' ? aiPlan.distanceKm : (isSonapurAvoided ? 342 : 245),
       estimatedDurationHours: typeof aiPlan?.estimatedDurationHours === 'number' ? aiPlan.estimatedDurationHours : (isSonapurAvoided ? 6.8 : 5.2),
       delayAvoidedMinutes: typeof aiPlan?.delayAvoidedMinutes === 'number' ? aiPlan.delayAvoidedMinutes : (isSonapurAvoided ? 240 : 0),

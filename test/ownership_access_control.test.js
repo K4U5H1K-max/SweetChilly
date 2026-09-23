@@ -73,8 +73,8 @@ console.log('================================================================\n'
 async function runPhase3C3Suite() {
   // 1. Setup Isolated Repositories
   const userRepo = new UserRepository(null);
-  const vehRepo = new VehicleRepository(null);
-  const depRepo = new DeploymentRepository(null);
+  const vehRepo = new VehicleRepository(null, { seedDemo: true });
+  const depRepo = new DeploymentRepository(null, { seedDemo: true });
   vehRepo.setDeploymentRepository(depRepo);
   vehRepo.setUserRepository(userRepo);
   depRepo.setVehicleRepository(vehRepo);

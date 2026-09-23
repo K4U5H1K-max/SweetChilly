@@ -15,8 +15,8 @@ console.log('=== [PROJECT BRAHMAPUTRA — PHASE 3B.1: VEHICLE DEPLOYMENT / TRIP 
 async function runDeploymentTests() {
   // Test 1: Deployment repository initialization
   console.log('1. Testing Deployment repository initialization...');
-  const isolatedVehRepo = new VehicleRepository(null);
-  const isolatedDepRepo = new DeploymentRepository(null);
+  const isolatedVehRepo = new VehicleRepository(null, { seedDemo: true });
+  const isolatedDepRepo = new DeploymentRepository(null, { seedDemo: true });
   isolatedVehRepo.setDeploymentRepository(isolatedDepRepo);
 
   assert.strictEqual(isolatedDepRepo.memoryStore.length, INITIAL_NER_DEPLOYMENTS.length);

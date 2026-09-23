@@ -219,7 +219,7 @@ export default function UserVehicleManager({ onDeployVehicle }) {
                 <div className="bg-slate-50 rounded-lg p-2.5 text-xs text-slate-600 flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <span className="text-slate-400">Hub / Staging: </span>
-                    <strong className="text-slate-800">{v.currentLocationName || 'Guwahati Hub'}</strong>
+                    <strong className="text-slate-800">{v.currentLocationName || (v.origin ? `${v.origin} Hub` : 'Depot / Staging Hub')}</strong>
                   </div>
                   <div>
                     <span className="text-slate-400">Capacity: </span>

@@ -13,8 +13,8 @@ import { calculateKPIs, INITIAL_NER_DEPLOYMENTS, INITIAL_VEHICLES } from '../src
 console.log('=== [PROJECT BRAHMAPUTRA — PHASE 3B.2: FRONTEND DEPLOYMENT UI & STATE TESTS] ===\n');
 
 async function runFrontendDeploymentUITests() {
-  const vehRepo = new VehicleRepository(null);
-  const depRepo = new DeploymentRepository(null);
+  const vehRepo = new VehicleRepository(null, { seedDemo: true });
+  const depRepo = new DeploymentRepository(null, { seedDemo: true });
   vehRepo.setDeploymentRepository(depRepo);
 
   // Setup lightweight Express test server simulating the backend API

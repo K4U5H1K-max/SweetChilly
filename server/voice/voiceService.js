@@ -346,6 +346,7 @@ class VoiceService {
         isFlagged: !isSafe,
         flagReason: isSafe ? null : (vehicle.flagReason || `Safety check outcome: ${normalizedResult.outcome}`),
       };
+      Object.assign(vehicle, updates);
       const updatedVeh = await repo.updateVehicle(vehicle.id, updates);
       if (updatedVeh) {
         Object.assign(vehicle, updatedVeh);
@@ -356,6 +357,7 @@ class VoiceService {
         activeCallId: callId,
         isFlagged: true,
       };
+      Object.assign(vehicle, updates);
       const updatedVeh = await repo.updateVehicle(vehicle.id, updates);
       if (updatedVeh) {
         Object.assign(vehicle, updatedVeh);

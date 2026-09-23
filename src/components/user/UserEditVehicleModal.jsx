@@ -25,7 +25,7 @@ export default function UserEditVehicleModal({ isOpen, vehicle, onClose, onSucce
         cargoCapacityKg: vehicle.cargoCapacityKg || 5000,
         driverName: vehicle.driverName || '',
         driverPhone: vehicle.driverPhone || '',
-        currentLocationName: vehicle.currentLocationName || 'Guwahati Hub',
+        currentLocationName: vehicle.currentLocationName || (vehicle.origin ? `${vehicle.origin} Hub` : (NER_CITIES[0] ? `${NER_CITIES[0]} Hub` : 'Central Hub')),
       });
       setError(null);
     }

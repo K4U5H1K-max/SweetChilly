@@ -7,9 +7,9 @@ export default function UserDeployModal({ isOpen, preselectedVehicle, onClose, o
 
   const [formData, setFormData] = useState({
     vehicleId: '',
-    origin: 'Guwahati',
-    destination: 'Shillong',
-    assignedCorridor: 'Guwahati - Shillong (GS Road / NH-27)',
+    origin: '',
+    destination: '',
+    assignedCorridor: '',
     cargo: 'Essential Medicines & Vaccines',
     priority: 'HIGH',
     dispatchNotes: '',
@@ -20,9 +20,30 @@ export default function UserDeployModal({ isOpen, preselectedVehicle, onClose, o
 
   useEffect(() => {
     if (preselectedVehicle) {
-      setFormData((prev) => ({ ...prev, vehicleId: preselectedVehicle.id }));
-    } else if (availableVehicles.length > 0 && !formData.vehicleId) {
-      setFormData((prev) => ({ ...prev, vehicleId: availableVehicles[0].id }));
+      const vOrigin = preselectedVehicle.origin || (preselectedVehicle.currentLocationName ? preselectedVehicle.currentLocationName.replace(/\s+Logistics\s+Hub|\s+Hub/i, '').trim() : 'Agartala');
+      const cleanOrigin = NER_CITIES.find((c) => c.name.toLowerCase() === vOrigin.toLowerCase())?.name || vOrigin;
+      const defaultDest = cleanOrigin === 'Silchar' ? 'Shillong' : 'Silchar';
+
+      setFormData((prev) => ({
+        ...prev,
+        vehicleId: preselectedVehicle.id,
+        origin: cleanOrigin,
+        destination: defaultDest,
+        assignedCorridor: `${cleanOrigin} - ${defaultDest} Corridor`,
+      }));
+    } else if (availableVehicles.length > 0) {
+      const v = availableVehicles.find((veh) => veh.id === formData.vehicleId) || availableVehicles[0];
+      const vOrigin = v.origin || (v.currentLocationName ? v.currentLocationName.replace(/\s+Logistics\s+Hub|\s+Hub/i, '').trim() : 'Agartala');
+      const cleanOrigin = NER_CITIES.find((c) => c.name.toLowerCase() === vOrigin.toLowerCase())?.name || vOrigin;
+      const defaultDest = cleanOrigin === 'Silchar' ? 'Shillong' : 'Silchar';
+
+      setFormData((prev) => ({
+        ...prev,
+        vehicleId: v.id,
+        origin: prev.origin || cleanOrigin,
+        destination: prev.destination || defaultDest,
+        assignedCorridor: prev.assignedCorridor || `${prev.origin || cleanOrigin} - ${prev.destination || defaultDest} Corridor`,
+      }));
     }
   }, [preselectedVehicle, availableVehicles]);
 
@@ -59,18 +80,29 @@ export default function UserDeployModal({ isOpen, preselectedVehicle, onClose, o
       setError('Please select an available vehicle to deploy.');
       return;
     }
-    if (formData.origin === formData.destination) {
+    if (!formData.origin || !formData.destination) {
+      setError('Origin and Destination hubs are required.');
+      return;
+    }
+    if (formData.origin.trim().toLowerCase() === formData.destination.trim().toLowerCase()) {
       setError('Origin and Destination hubs cannot be identical.');
       return;
     }
+
+    const originCity = NER_CITIES.find((c) => c.name.toLowerCase() === formData.origin.trim().toLowerCase());
+    const destCity = NER_CITIES.find((c) => c.name.toLowerCase() === formData.destination.trim().toLowerCase());
 
     setLoading(true);
     try {
       const payload = {
         vehicleId: formData.vehicleId,
-        origin: formData.origin,
-        destination: formData.destination,
-        assignedCorridor: formData.assignedCorridor,
+        origin: formData.origin.trim(),
+        destination: formData.destination.trim(),
+        originLat: originCity?.lat ?? null,
+        originLng: originCity?.lng ?? null,
+        destinationLat: destCity?.lat ?? null,
+        destinationLng: destCity?.lng ?? null,
+        assignedCorridor: formData.assignedCorridor || `${formData.origin} - ${formData.destination} Corridor`,
         cargo: formData.cargo,
         priority: formData.priority,
         status: 'ACTIVE',

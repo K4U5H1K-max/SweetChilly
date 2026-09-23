@@ -47,7 +47,7 @@ export default function UserDashboard() {
     {
       id: 'kpi-vehicles',
       value: vehiclesLoading ? '...' : totalVehiclesCount,
-      label: 'Active Vehicles',
+      label: 'Registered Fleet',
       subtext: `${availCount} Available at Depot`,
       chipVariant: 'neutral',
       chipLabel: 'Fleet',

@@ -5,7 +5,7 @@
  * Supports PostgreSQL with transparent in-memory development fallback when DATABASE_URL is unset.
  */
 
-import { INITIAL_NER_DEPLOYMENTS } from './schema.js';
+import { INITIAL_NER_DEPLOYMENTS, resolveLocationCoordinates } from './schema.js';
 
 export const VALID_DEPLOYMENT_STATUSES = [
   'PLANNED',
@@ -24,11 +24,24 @@ export const ACTIVE_DEPLOYMENT_STATUSES = [
 export class DeploymentRepository {
   /**
    * @param {import('pg').Pool | null} [pool]
+   * @param {object} [options]
+   * @param {boolean} [options.seedDemo=false]
    */
-  constructor(pool = null) {
+  constructor(pool = null, { seedDemo = false } = {}) {
     this.pool = pool;
+    this.memoryStore = [];
+    if (seedDemo) {
+      this.seedDemoData();
+    }
+    this.vehicleRepo = null;
+  }
+
+  /**
+   * Explicit development/test helper to seed demonstration deployments into memory store.
+   * @returns {number}
+   */
+  seedDemoData() {
     const nowIso = new Date().toISOString();
-    // In-memory backing store for local testing/dev when DATABASE_URL is unset
     this.memoryStore = INITIAL_NER_DEPLOYMENTS.map((d) => ({
       createdAt: d.createdAt || nowIso,
       updatedAt: d.updatedAt || nowIso,
@@ -36,7 +49,7 @@ export class DeploymentRepository {
       completedAt: d.completedAt || null,
       ...d,
     }));
-    this.vehicleRepo = null;
+    return this.memoryStore.length;
   }
 
   /**
@@ -79,6 +92,10 @@ export class DeploymentRepository {
       status: row.status,
       cargo: row.cargo,
       priority: row.priority,
+      originLat: row.origin_lat !== null && row.origin_lat !== undefined ? Number(row.origin_lat) : (resolveLocationCoordinates(row.origin)?.lat ?? null),
+      originLng: row.origin_lng !== null && row.origin_lng !== undefined ? Number(row.origin_lng) : (resolveLocationCoordinates(row.origin)?.lng ?? null),
+      destinationLat: row.destination_lat !== null && row.destination_lat !== undefined ? Number(row.destination_lat) : (resolveLocationCoordinates(row.destination)?.lat ?? null),
+      destinationLng: row.destination_lng !== null && row.destination_lng !== undefined ? Number(row.destination_lng) : (resolveLocationCoordinates(row.destination)?.lng ?? null),
       startedAt: row.started_at ? new Date(row.started_at).toISOString() : null,
       completedAt: row.completed_at ? new Date(row.completed_at).toISOString() : null,
       createdAt: row.created_at ? new Date(row.created_at).toISOString() : undefined,
@@ -270,6 +287,22 @@ export class DeploymentRepository {
       ? String(data.id).trim()
       : `DEP-NER-${Date.now().toString(36).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
+    const resolvedOrigin = resolveLocationCoordinates(origin);
+    const resolvedDest = resolveLocationCoordinates(destination);
+
+    const originLat = data.originLat !== undefined && data.originLat !== null
+      ? Number(data.originLat)
+      : (resolvedOrigin?.lat ?? null);
+    const originLng = data.originLng !== undefined && data.originLng !== null
+      ? Number(data.originLng)
+      : (resolvedOrigin?.lng ?? null);
+    const destinationLat = data.destinationLat !== undefined && data.destinationLat !== null
+      ? Number(data.destinationLat)
+      : (resolvedDest?.lat ?? null);
+    const destinationLng = data.destinationLng !== undefined && data.destinationLng !== null
+      ? Number(data.destinationLng)
+      : (resolvedDest?.lng ?? null);
+
     const startedAt = data.startedAt || (status === 'ACTIVE' ? new Date().toISOString() : null);
     const completedAt = data.completedAt || null;
 
@@ -278,9 +311,10 @@ export class DeploymentRepository {
         const res = await this.pool.query(
           `INSERT INTO deployments (
             id, vehicle_id, origin, destination, assigned_corridor, status,
-            cargo, priority, started_at, completed_at, created_at, updated_at
+            cargo, priority, origin_lat, origin_lng, destination_lat, destination_lng,
+            started_at, completed_at, created_at, updated_at
           ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW()
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW(), NOW()
           ) RETURNING *;`,
           [
             deploymentId,
@@ -291,6 +325,10 @@ export class DeploymentRepository {
             status,
             cargo,
             priority,
+            originLat,
+            originLng,
+            destinationLat,
+            destinationLng,
             startedAt,
             completedAt,
           ]
@@ -318,6 +356,10 @@ export class DeploymentRepository {
       status,
       cargo,
       priority,
+      originLat,
+      originLng,
+      destinationLat,
+      destinationLng,
       startedAt,
       completedAt,
       createdAt: new Date().toISOString(),

@@ -504,9 +504,9 @@ export function calculateKPIs(incidents = [], alerts = [], vehicles = [], corrid
 
   const activeDepsCount = deployments.length > 0
     ? deployments.filter((d) => ['ACTIVE', 'DELAYED', 'PLANNED'].includes(d.status)).length
-    : vehicles.filter((v) => v.hasActiveDeployment || ['IN_TRANSIT', 'ACTIVE', 'DELAYED', 'REROUTED'].includes(String(v.status || '').toUpperCase())).length;
+    : vehicles.filter((v) => v.hasActiveDeployment || ['ACTIVE', 'DELAYED', 'PLANNED'].includes(v.deploymentStatus)).length;
 
-  const vehiclesInTransit = activeDepsCount || vehicles.length;
+  const vehiclesInTransit = activeDepsCount;
 
   // Average delay across all corridors
   const totalDelay = corridors.reduce((acc, c) => acc + (c.delayMinutes || 0), 0);

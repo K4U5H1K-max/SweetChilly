@@ -14,7 +14,7 @@ console.log('=== [PROJECT BRAHMAPUTRA — PHASE 3A.1: VEHICLE REPOSITORY & PERSI
 async function runTests() {
   // Test 1: In-Memory Repository Initialization & Seed Count
   console.log('1. Testing In-Memory Repository Initialization...');
-  const repo = new VehicleRepository(null);
+  const repo = new VehicleRepository(null, { seedDemo: true });
   assert.strictEqual(repo.isPersistent(), false, 'Default repository without pool should be in in-memory mode');
   const count = await repo.countVehicles();
   assert.strictEqual(count, INITIAL_NER_VEHICLES.length, 'Initial count should match seed fleet size');

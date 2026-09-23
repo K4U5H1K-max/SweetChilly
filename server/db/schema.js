@@ -216,7 +216,7 @@ CREATE TABLE IF NOT EXISTS vehicles (
   type VARCHAR(128) NOT NULL,
   capacity VARCHAR(64) NOT NULL,
   cargo VARCHAR(255) NOT NULL,
-  status VARCHAR(64) NOT NULL DEFAULT 'IN_TRANSIT',
+  status VARCHAR(64) NOT NULL DEFAULT 'AVAILABLE',
   speed_km_h INTEGER NOT NULL DEFAULT 45,
   origin VARCHAR(128) NOT NULL,
   destination VARCHAR(128) NOT NULL,
@@ -249,6 +249,10 @@ CREATE TABLE IF NOT EXISTS deployments (
   status VARCHAR(64) NOT NULL DEFAULT 'ACTIVE',
   cargo VARCHAR(255) NOT NULL DEFAULT 'General Relief Goods',
   priority VARCHAR(64) NOT NULL DEFAULT 'MEDIUM',
+  origin_lat DOUBLE PRECISION,
+  origin_lng DOUBLE PRECISION,
+  destination_lat DOUBLE PRECISION,
+  destination_lng DOUBLE PRECISION,
   started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   completed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -263,6 +267,46 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_active_deployment_per_vehicle
 ON deployments (vehicle_id)
 WHERE status IN ('PLANNED', 'ACTIVE', 'DELAYED');
 `;
+
+export const NER_HUB_LOCATIONS = {
+  Guwahati: { lat: 26.1445, lng: 91.7362 },
+  Shillong: { lat: 25.5788, lng: 91.8933 },
+  Silchar: { lat: 24.8170, lng: 92.7960 },
+  Dimapur: { lat: 25.9068, lng: 93.7273 },
+  Imphal: { lat: 24.8170, lng: 93.9368 },
+  Itanagar: { lat: 27.0844, lng: 93.6053 },
+  Aizawl: { lat: 23.7271, lng: 92.7176 },
+  Agartala: { lat: 23.8315, lng: 91.2868 },
+  Gangtok: { lat: 27.3389, lng: 88.6065 },
+  Kohima: { lat: 25.6751, lng: 94.1086 },
+  Tezpur: { lat: 26.6338, lng: 92.7926 },
+  Jorhat: { lat: 26.7509, lng: 94.2037 },
+  Haflong: { lat: 25.1667, lng: 93.0167 },
+  Nagaon: { lat: 26.3450, lng: 92.6840 },
+  Dibrugarh: { lat: 27.4728, lng: 94.9120 },
+  Siliguri: { lat: 26.7271, lng: 88.3953 },
+  Sonapur: { lat: 26.1167, lng: 91.9833 },
+  Jiribam: { lat: 24.8021, lng: 93.1235 },
+  Tura: { lat: 25.5144, lng: 90.2033 },
+  Bongaigaon: { lat: 26.5028, lng: 90.5528 },
+};
+
+/**
+ * Resolves geographic coordinates for known North East regional hubs case-insensitively.
+ * Returns null if not found (strictly prevents static fallback substitution).
+ * @param {string} name
+ * @returns {{ lat: number, lng: number } | null}
+ */
+export function resolveLocationCoordinates(name) {
+  if (!name || typeof name !== 'string') return null;
+  const clean = name.trim().toLowerCase();
+  for (const [key, coords] of Object.entries(NER_HUB_LOCATIONS)) {
+    if (clean === key.toLowerCase() || clean.includes(key.toLowerCase()) || key.toLowerCase().includes(clean)) {
+      return { lat: coords.lat, lng: coords.lng };
+    }
+  }
+  return null;
+}
 
 export const INITIAL_NER_DEPLOYMENTS = [
   {
@@ -392,10 +436,14 @@ export async function initializeDatabase(pool) {
     await client.query(CREATE_VEHICLES_TABLE_SQL);
     await client.query(CREATE_DEPLOYMENTS_TABLE_SQL);
 
-    // Idempotent migration for existing vehicles table
+    // Idempotent migration for existing vehicles and deployments tables
     await client.query(`
       ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS owner_user_id VARCHAR(64) REFERENCES users(id) ON DELETE RESTRICT;
       CREATE INDEX IF NOT EXISTS idx_vehicles_owner_user_id ON vehicles(owner_user_id);
+      ALTER TABLE deployments ADD COLUMN IF NOT EXISTS origin_lat DOUBLE PRECISION;
+      ALTER TABLE deployments ADD COLUMN IF NOT EXISTS origin_lng DOUBLE PRECISION;
+      ALTER TABLE deployments ADD COLUMN IF NOT EXISTS destination_lat DOUBLE PRECISION;
+      ALTER TABLE deployments ADD COLUMN IF NOT EXISTS destination_lng DOUBLE PRECISION;
     `);
 
     // 2. Bootstrap Initial Administrator if explicitly configured and no ADMIN account exists
@@ -427,114 +475,112 @@ export async function initializeDatabase(pool) {
       }
     }
 
-    // 3. Check Existing Vehicle Count
-    const countResult = await client.query('SELECT COUNT(*) AS total FROM vehicles;');
-    const currentCount = parseInt(countResult.rows[0]?.total || '0', 10);
+    // 3. Query Table Counts for diagnostics
+    const vCountRes = await client.query('SELECT COUNT(*) AS total FROM vehicles;');
+    const vCount = parseInt(vCountRes.rows[0]?.total || '0', 10);
 
-    let seededVehicles = false;
+    const dCountRes = await client.query('SELECT COUNT(*) AS total FROM deployments;');
+    const dCount = parseInt(dCountRes.rows[0]?.total || '0', 10);
 
-    // 4. Seed Vehicles Only If Table Is Completely Empty
-    if (currentCount === 0) {
-      console.log('[Database] Vehicles table is empty. Seeding initial NER demonstration fleet...');
-      for (const v of INITIAL_NER_VEHICLES) {
-        await client.query(
-          `INSERT INTO vehicles (
-            id, reg_number, name, type, capacity, cargo, status, speed_km_h,
-            origin, destination, lat, lng, assigned_corridor, delay_est_minutes,
-            priority, driver_name, driver_phone, is_flagged, flag_reason,
-            safety_status, last_safety_check, active_call_id, created_at, updated_at
-          ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8,
-            $9, $10, $11, $12, $13, $14,
-            $15, $16, $17, $18, $19,
-            $20, $21, $22, NOW(), NOW()
-          ) ON CONFLICT (id) DO NOTHING;`,
-          [
-            v.id,
-            v.regNumber,
-            v.name,
-            v.type,
-            v.capacity,
-            v.cargo,
-            v.status,
-            v.speedKmH,
-            v.origin,
-            v.destination,
-            v.currentPos.lat,
-            v.currentPos.lng,
-            v.assignedCorridor,
-            v.delayEstMinutes,
-            v.priority,
-            v.driverName,
-            v.driverPhone,
-            v.isFlagged,
-            v.flagReason,
-            v.safetyStatus,
-            v.lastSafetyCheck,
-            v.activeCallId,
-          ]
-        );
-      }
-      seededVehicles = true;
-      console.log(`[Database] Successfully seeded ${INITIAL_NER_VEHICLES.length} demonstration vehicles.`);
-    } else {
-      console.log(`[Database] Vehicles table already contains ${currentCount} records. Skipping vehicle seed.`);
-    }
-
-    // 5. Check Existing Deployments Count
-    const depCountResult = await client.query('SELECT COUNT(*) AS total FROM deployments;');
-    const currentDepCount = parseInt(depCountResult.rows[0]?.total || '0', 10);
-
-    let seededDeployments = false;
-
-    // 6. Seed Deployments If Deployments Table Is Empty
-    if (currentDepCount === 0) {
-      console.log('[Database] Deployments table is empty. Seeding initial demonstration deployments...');
-      for (const d of INITIAL_NER_DEPLOYMENTS) {
-        await client.query(
-          `INSERT INTO deployments (
-            id, vehicle_id, origin, destination, assigned_corridor, status,
-            cargo, priority, started_at, completed_at, created_at, updated_at
-          ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW()
-          ) ON CONFLICT (id) DO NOTHING;`,
-          [
-            d.id,
-            d.vehicleId,
-            d.origin,
-            d.destination,
-            d.assignedCorridor,
-            d.status,
-            d.cargo,
-            d.priority,
-            d.startedAt,
-            d.completedAt,
-          ]
-        );
-      }
-      seededDeployments = true;
-      console.log(`[Database] Successfully seeded ${INITIAL_NER_DEPLOYMENTS.length} demonstration deployments.`);
-    } else {
-      console.log(`[Database] Deployments table already contains ${currentDepCount} records. Skipping deployment seed.`);
-    }
-
-    const finalCountResult = await client.query('SELECT COUNT(*) AS total FROM vehicles;');
-    const finalCount = parseInt(finalCountResult.rows[0]?.total || '0', 10);
-
-    const finalDepCountResult = await client.query('SELECT COUNT(*) AS total FROM deployments;');
-    const finalDepCount = parseInt(finalDepCountResult.rows[0]?.total || '0', 10);
-
-    const finalUserCountResult = await client.query('SELECT COUNT(*) AS total FROM users;');
-    const finalUserCount = parseInt(finalUserCountResult.rows[0]?.total || '0', 10);
+    const uCountRes = await client.query('SELECT COUNT(*) AS total FROM users;');
+    const uCount = parseInt(uCountRes.rows[0]?.total || '0', 10);
 
     return {
       initialized: true,
-      seeded: seededVehicles || seededDeployments || seededAdmin,
-      count: finalCount,
-      vehicleCount: finalCount,
-      deploymentCount: finalDepCount,
-      userCount: finalUserCount,
+      seeded: seededAdmin,
+      count: vCount,
+      vehicleCount: vCount,
+      deploymentCount: dCount,
+      userCount: uCount,
     };
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Explicit development-only function to seed demonstration fleet data.
+ * NEVER invoked automatically during production startup.
+ *
+ * @param {import('pg').Pool} pool
+ * @returns {Promise<{ seededVehicles: number, seededDeployments: number }>}
+ */
+export async function seedDemonstrationData(pool) {
+  if (!pool) {
+    throw new Error('Database pool required for demonstration data seeding.');
+  }
+
+  const client = await pool.connect();
+  try {
+    let seededVehicles = 0;
+    let seededDeployments = 0;
+
+    for (const v of INITIAL_NER_VEHICLES) {
+      const res = await client.query(
+        `INSERT INTO vehicles (
+          id, reg_number, name, type, capacity, cargo, status, speed_km_h,
+          origin, destination, lat, lng, assigned_corridor, delay_est_minutes,
+          priority, driver_name, driver_phone, is_flagged, flag_reason,
+          safety_status, last_safety_check, active_call_id, created_at, updated_at
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8,
+          $9, $10, $11, $12, $13, $14,
+          $15, $16, $17, $18, $19,
+          $20, $21, $22, NOW(), NOW()
+        ) ON CONFLICT (id) DO NOTHING RETURNING id;`,
+        [
+          v.id,
+          v.regNumber,
+          v.name,
+          v.type,
+          v.capacity,
+          v.cargo,
+          v.status,
+          v.speedKmH,
+          v.origin,
+          v.destination,
+          v.currentPos.lat,
+          v.currentPos.lng,
+          v.assignedCorridor,
+          v.delayEstMinutes,
+          v.priority,
+          v.driverName,
+          v.driverPhone,
+          v.isFlagged,
+          v.flagReason,
+          v.safetyStatus,
+          v.lastSafetyCheck,
+          v.activeCallId,
+        ]
+      );
+      if (res.rows.length > 0) seededVehicles++;
+    }
+
+    for (const d of INITIAL_NER_DEPLOYMENTS) {
+      const res = await client.query(
+        `INSERT INTO deployments (
+          id, vehicle_id, origin, destination, assigned_corridor, status,
+          cargo, priority, started_at, completed_at, created_at, updated_at
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW()
+        ) ON CONFLICT (id) DO NOTHING RETURNING id;`,
+        [
+          d.id,
+          d.vehicleId,
+          d.origin,
+          d.destination,
+          d.assignedCorridor,
+          d.status,
+          d.cargo,
+          d.priority,
+          d.startedAt,
+          d.completedAt,
+        ]
+      );
+      if (res.rows.length > 0) seededDeployments++;
+    }
+
+    return { seededVehicles, seededDeployments };
   } finally {
     client.release();
   }
