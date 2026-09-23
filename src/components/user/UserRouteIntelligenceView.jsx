@@ -116,7 +116,7 @@ export default function UserRouteIntelligenceView() {
             {planningLoading && (
               <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
             )}
-            <span>{planningLoading ? 'Evaluating Feasibility...' : '⚡ Calculate Optimal Corridor'}</span>
+            <span>{planningLoading ? 'Evaluating Feasibility...' : 'Calculate Optimal Corridor'}</span>
           </button>
 
           {planningError && (

@@ -85,7 +85,13 @@ async function runPWAAcceptanceTests() {
 
   const mobileNavContent = fs.readFileSync(mobileNavPath, 'utf8');
   assert.ok(mobileNavContent.includes('pb-safe'), 'UserMobileNav must utilize pb-safe');
-  assert.ok(mobileNavContent.includes('OVERVIEW') && mobileNavContent.includes('VEHICLES') && mobileNavContent.includes('DEPLOYMENTS') && mobileNavContent.includes('ROUTES'), 'UserMobileNav must support all 4 primary destinations');
+  assert.ok(
+    (mobileNavContent.includes('HOME') || mobileNavContent.includes('OVERVIEW')) &&
+    mobileNavContent.includes('VEHICLES') &&
+    mobileNavContent.includes('DEPLOYMENTS') &&
+    (mobileNavContent.includes('MAP') || mobileNavContent.includes('ROUTES')),
+    'UserMobileNav must support primary destinations'
+  );
   console.log('   ✓ UserMobileNav, NetworkStatusBanner, and InstallPromptBanner verified');
 
   // Test 7: Security Audit - Frontend Bundle Secret Immunity

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Navbar from '../Navbar';
 import CommandCenterKPIs from '../CommandCenterKPIs';
 import MapplsGISMap from '../MapplsGISMap';
@@ -11,13 +11,27 @@ import DeployVehicleModal from '../DeployVehicleModal';
 import DeploymentDetailsModal from '../DeploymentDetailsModal';
 import RoutePlannerModal from '../RoutePlannerModal';
 import DriverSafetyModal from '../DriverSafetyModal';
-import ProjectBrahmaputraLanding from '../ProjectBrahmaputra/ProjectBrahmaputraLanding';
 import AdminMobileNav from './AdminMobileNav';
 import { useApp } from '../../context/AppContext';
+import { formatIST } from '../../utils/timeFormat';
+import {
+  IconHome,
+  IconMap,
+  IconTruck,
+  IconWarning,
+  IconMore,
+  IconShield,
+  IconRoute,
+  IconPlus,
+} from '../common/AppIcons';
+import InfoPopover from '../common/InfoPopover';
 
 export default function AdminDashboard() {
-  const { kpis, backendHealth, alerts, vehicles } = useApp();
-  const [showLandingPage, setShowLandingPage] = useState(false);
+  const { kpis, backendHealth, alerts, vehicles, incidents, activeDeployments } = useApp();
+
+  // Active Screen: 'OVERVIEW' | 'MAP' | 'FLEET' | 'ALERTS' | 'MORE'
+  const [adminActiveTab, setAdminActiveTab] = useState('OVERVIEW');
+
   const [selectedIncidentId, setSelectedIncidentId] = useState(null);
   const [selectedVehicleId, setSelectedVehicleId] = useState(null);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
@@ -34,8 +48,49 @@ export default function AdminDashboard() {
   const [routePlannerDestination, setRoutePlannerDestination] = useState('Silchar');
   const [editingVehicleId, setEditingVehicleId] = useState(null);
   const [toastNotification, setToastNotification] = useState(null);
-  const [adminActiveTab, setAdminActiveTab] = useState('command-center');
-  const [adminMoreSheetOpen, setAdminMoreSheetOpen] = useState(false);
+
+  // =========================================================================
+  // Mobile / PWA Browser Back-Button Hierarchy Handling
+  // =========================================================================
+  const anyModalOpen =
+    isReportModalOpen ||
+    isVehicleModalOpen ||
+    isDeployModalOpen ||
+    isDetailsModalOpen ||
+    isRoutePlannerOpen ||
+    isSafetyModalOpen;
+
+  const handleSelectTab = useCallback((tabId) => {
+    if (tabId !== adminActiveTab) {
+      window.history.pushState({ screen: tabId }, '');
+      setAdminActiveTab(tabId);
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    }
+  }, [adminActiveTab]);
+
+  useEffect(() => {
+    if (!window.history.state || !window.history.state.screen) {
+      window.history.replaceState({ screen: 'OVERVIEW' }, '');
+    }
+
+    const handlePopState = (event) => {
+      if (anyModalOpen) {
+        setIsReportModalOpen(false);
+        setIsVehicleModalOpen(false);
+        setIsDeployModalOpen(false);
+        setIsDetailsModalOpen(false);
+        setIsRoutePlannerOpen(false);
+        setIsSafetyModalOpen(false);
+        return;
+      }
+
+      const targetScreen = event.state?.screen || 'OVERVIEW';
+      setAdminActiveTab(targetScreen);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [anyModalOpen]);
 
   const handleOpenSafetyModal = (vehId) => {
     setSafetyVehicleId(vehId);
@@ -63,13 +118,11 @@ export default function AdminDashboard() {
     setSelectedIncidentId(newIncidentId);
     setToastNotification({
       type: 'success',
-      title: 'Incident verified and broadcast',
-      message: `Disruption logged as verified alert. Interactive marker placed on map.`,
+      title: 'Incident Verified & Broadcast',
+      message: `Disruption logged as verified alert. Interactive marker placed on GIS map.`,
     });
     setTimeout(() => setToastNotification(null), 6000);
-
-    const el = document.getElementById('gis-map');
-    if (el) el.scrollIntoView({ behavior: 'smooth' });
+    handleSelectTab('MAP');
   };
 
   const handleVehicleCreated = (newVehicle) => {
@@ -80,9 +133,6 @@ export default function AdminDashboard() {
       message: `Vehicle ${newVehicle.id} (${newVehicle.type}) permanently registered and available for corridor dispatch.`,
     });
     setTimeout(() => setToastNotification(null), 6000);
-
-    const el = document.getElementById('gis-map');
-    if (el) el.scrollIntoView({ behavior: 'smooth' });
   };
 
   const handleDeploymentCreated = (newDeployment) => {
@@ -93,9 +143,6 @@ export default function AdminDashboard() {
       message: `Mission ${newDeployment.id || ''} active: ${newDeployment.origin} → ${newDeployment.destination} (${newDeployment.assignedCorridor}).`,
     });
     setTimeout(() => setToastNotification(null), 6000);
-
-    const el = document.getElementById('gis-map');
-    if (el) el.scrollIntoView({ behavior: 'smooth' });
   };
 
   const handleEditVehicle = (vehId) => {
@@ -105,13 +152,11 @@ export default function AdminDashboard() {
   const handleRouteProjected = (route) => {
     setToastNotification({
       type: 'success',
-      title: 'Optimal route projected',
+      title: 'Optimal Route Projected',
       message: `Corridor route rendered: ${route.recommendedCorridor} (${route.distanceKm} km, ~${route.estimatedDurationHours}h).`,
     });
     setTimeout(() => setToastNotification(null), 6000);
-
-    const el = document.getElementById('gis-map');
-    if (el) el.scrollIntoView({ behavior: 'smooth' });
+    handleSelectTab('MAP');
   };
 
   const handlePlanBypass = (alert) => {
@@ -128,97 +173,131 @@ export default function AdminDashboard() {
     setIsRoutePlannerOpen(true);
   };
 
-  const handleMobileNavSelect = (tabId) => {
-    setAdminActiveTab(tabId);
-    const el = document.getElementById(tabId);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth' });
-    } else {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  };
-
   return (
-    <>
-      {showLandingPage && (
-        <ProjectBrahmaputraLanding onProceed={() => setShowLandingPage(false)} />
+    <div className="min-h-screen bg-[#F5F7FA] text-[#0B1220] flex flex-col font-sans antialiased pb-24 lg:pb-8">
+      {/* Top Global Navigation Bar */}
+      <Navbar
+        onOpenReportModal={() => setIsReportModalOpen(true)}
+        onOpenAddVehicle={() => setIsVehicleModalOpen(true)}
+        onOpenRoutePlanner={() => setIsRoutePlannerOpen(true)}
+      />
+
+      {/* Global Floating Toast Notification */}
+      {toastNotification && (
+        <div className="fixed top-20 right-4 z-500 max-w-sm w-full bg-slate-900 text-white rounded-2xl shadow-2xl border border-slate-700 p-4 animate-fade-in flex items-start gap-3">
+          <div className="w-8 h-8 rounded-xl bg-emerald-600/20 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5 font-bold">
+            ✓
+          </div>
+          <div className="flex-1 min-w-0">
+            <h4 className="text-xs font-bold text-white font-heading">{toastNotification.title}</h4>
+            <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">{toastNotification.message}</p>
+          </div>
+          <button
+            onClick={() => setToastNotification(null)}
+            className="text-slate-400 hover:text-white p-1 text-xs cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
       )}
-      <div className="min-h-screen bg-[#F5F7FA] text-[#0B1220] flex flex-col font-sans antialiased pb-20 lg:pb-6">
-        {/* Top Global Navigation Bar */}
-        <Navbar
-          onOpenReportModal={() => setIsReportModalOpen(true)}
-          onOpenAddVehicle={() => setIsVehicleModalOpen(true)}
-          onOpenRoutePlanner={() => setIsRoutePlannerOpen(true)}
-        />
 
-        {/* Global Floating Toast Notification */}
-        {toastNotification && (
-          <div className="fixed top-20 right-4 z-500 max-w-sm w-full bg-slate-900 text-white rounded-xl shadow-2xl border border-slate-700 p-4 animate-fade-in flex items-start gap-3">
-            <div className="w-8 h-8 rounded-lg bg-emerald-600/20 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
-              ✓
+      {/* Main Content Area */}
+      <main className="w-full pt-[60px] sm:pt-[73px] flex-1">
+        {/* Desktop Screen Navigation Bar */}
+        <section className="hidden lg:block w-full bg-white border-b border-slate-200 py-4 px-6 lg:px-8 shadow-xs">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <h2 className="font-heading font-bold text-lg text-slate-900">
+                NER Logistics Command Center
+              </h2>
+              <span className="text-slate-300">•</span>
+              <span className="text-xs text-slate-500">8 North Eastern States</span>
             </div>
-            <div className="flex-1 min-w-0">
-              <h4 className="text-xs font-bold text-white font-heading">{toastNotification.title}</h4>
-              <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">{toastNotification.message}</p>
-            </div>
-            <button
-              onClick={() => setToastNotification(null)}
-              className="text-slate-400 hover:text-white p-1 text-xs"
-            >
-              ✕
-            </button>
+
+            <nav className="flex items-center gap-2">
+              {[
+                { id: 'OVERVIEW', label: 'Command Overview', icon: <IconHome className="w-4 h-4" /> },
+                { id: 'MAP', label: 'GIS Map & Operations', icon: <IconMap className="w-4 h-4" /> },
+                { id: 'FLEET', label: 'Fleet Telemetry', badge: vehicles ? vehicles.length : 0, icon: <IconTruck className="w-4 h-4" /> },
+                { id: 'ALERTS', label: 'Hazard Alerts', badge: alerts ? alerts.length : 0, icon: <IconWarning className="w-4 h-4" /> },
+                { id: 'MORE', label: 'Accessibility Scorecard', icon: <IconMore className="w-4 h-4" /> },
+              ].map((tab) => {
+                const isActive = adminActiveTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => handleSelectTab(tab.id)}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                      isActive
+                        ? 'bg-slate-900 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                    }`}
+                  >
+                    {tab.icon}
+                    <span>{tab.label}</span>
+                    {tab.badge !== undefined && tab.badge > 0 && (
+                      <span
+                        className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono font-bold ${
+                          isActive ? 'bg-blue-500 text-white' : 'bg-slate-200 text-slate-700'
+                        }`}
+                      >
+                        {tab.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
           </div>
-        )}
+        </section>
 
-        {/* Main Content Area */}
-        <main className="w-full pt-[60px] sm:pt-[73px] flex-1">
-          {/* Section 1: Hero & Real-time KPIs */}
-          <div id="command-center">
-            {/* Command Center Title Bar */}
-            <section className="w-full bg-white border-b border-slate-200 py-4 sm:py-6 px-4 sm:px-6 lg:px-8">
-              <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span className="font-semibold text-slate-700">Live Regional Command Feed</span>
-                    <span>•</span>
-                    <span className="font-mono">8 North Eastern States</span>
-                  </div>
-                  <h1 className="text-xl sm:text-2xl font-bold font-heading text-[#0B1220]">
-                    NER Logistics Command Center & Disruption Intelligence
-                  </h1>
+        {/* ========================================================= */}
+        {/* SCREEN 1: OVERVIEW (Real KPIs, Active Movements, Actions) */}
+        {/* ========================================================= */}
+        {adminActiveTab === 'OVERVIEW' && (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 space-y-5 animate-fade-in">
+            {/* Header Hero */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-card flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span className="font-semibold text-slate-700">Live Regional Command Feed</span>
+                  <span>•</span>
+                  <span className="font-mono">8 North Eastern States</span>
                 </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setIsRoutePlannerOpen(true)}
-                    className="px-3 py-1.5 bg-[#2563EB] hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow-xs flex items-center gap-1.5 touch-target sm:min-h-0 sm:min-w-0"
-                  >
-                    <span>⚡</span>
-                    <span>Plan Route</span>
-                  </button>
-                  <button
-                    onClick={() => setIsReportModalOpen(true)}
-                    className="px-3 py-1.5 bg-[#DC2626] hover:bg-red-700 text-white font-bold text-xs rounded-lg shadow-xs flex items-center gap-1.5 touch-target sm:min-h-0 sm:min-w-0"
-                  >
-                    <span className="material-symbols-outlined text-sm">report_problem</span>
-                    <span>Report</span>
-                  </button>
-                </div>
+                <h1 className="text-xl sm:text-2xl font-bold font-heading text-[#0B1220]">
+                  NER Logistics Intelligence & Disruption Command Center
+                </h1>
+                <p className="text-xs text-slate-500 mt-1">
+                  Real-time multi-tenant fleet dispatch, road accessibility scorecard, and automated Track 4 safety evaluation.
+                </p>
               </div>
-            </section>
 
-            {/* 4 Primary KPIs */}
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
-              <CommandCenterKPIs kpis={kpis} />
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => setIsRoutePlannerOpen(true)}
+                  className="px-3.5 py-2 bg-[#2563EB] hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer touch-target"
+                >
+                  <IconRoute className="w-4 h-4" />
+                  <span>Plan Route</span>
+                </button>
+                <button
+                  onClick={() => setIsReportModalOpen(true)}
+                  className="px-3.5 py-2 bg-[#DC2626] hover:bg-red-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer touch-target"
+                >
+                  <IconWarning className="w-4 h-4" />
+                  <span>Report Hazard</span>
+                </button>
+              </div>
             </div>
-          </div>
 
-          {/* Section 2: GIS Operations Map & Alert Panel Split */}
-          <section id="gis-map" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              {/* GIS Interactive Leaflet Map */}
-              <div className="lg:col-span-8 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-card">
+            {/* 5 Primary KPIs */}
+            <CommandCenterKPIs />
+
+            {/* Quick Map & Disruption Summary Split */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+              <div className="lg:col-span-8">
                 <MapplsGISMap
                   selectedIncidentId={selectedIncidentId}
                   onSelectIncident={(id) => setSelectedIncidentId(id)}
@@ -228,36 +307,71 @@ export default function AdminDashboard() {
                   onOpenSafetyModal={handleOpenSafetyModal}
                   onOpenDeployModal={handleOpenDeployModal}
                   onOpenVehicleHistory={handleOpenVehicleHistory}
+                  onPlanBypass={handlePlanBypass}
                 />
               </div>
 
-              {/* Real-time Verified Disruption Alert Panel */}
-              <div id="disruptions" className="lg:col-span-4 bg-white border border-slate-200 rounded-xl p-5 shadow-card">
+              <div className="lg:col-span-4">
                 <AlertPanel
                   onSelectIncident={(id) => {
                     setSelectedIncidentId(id);
-                    const el = document.getElementById('gis-map');
-                    if (el) el.scrollIntoView({ behavior: 'smooth' });
+                    handleSelectTab('MAP');
                   }}
                   onPlanBypass={handlePlanBypass}
                 />
               </div>
             </div>
-          </section>
+          </div>
+        )}
 
-          {/* Section 3: District Accessibility & Network Terrain Analysis */}
-          <section id="districts" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-            <DistrictAccessibility />
-          </section>
+        {/* ========================================================= */}
+        {/* SCREEN 2: MAP (Dedicated Full-Screen GIS Intelligence) */}
+        {/* ========================================================= */}
+        {adminActiveTab === 'MAP' && (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 space-y-4 animate-fade-in">
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-heading font-bold text-slate-900">
+                  Spatial Operations & Corridor Telemetry
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Interactive GIS map with layers for active deployments, road hazards, and corridor weather
+                </p>
+              </div>
+              <button
+                onClick={() => setIsRoutePlannerOpen(true)}
+                className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <IconRoute className="w-4 h-4" />
+                <span>Calculate Bypass</span>
+              </button>
+            </div>
 
-          {/* Section 4: Multi-Tenant Fleet & Corridor Telemetry Ledger */}
-          <section id="corridors" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+            <MapplsGISMap
+              fullHeight={true}
+              selectedIncidentId={selectedIncidentId}
+              onSelectIncident={(id) => setSelectedIncidentId(id)}
+              selectedVehicleId={selectedVehicleId}
+              onSelectVehicle={(id) => setSelectedVehicleId(id)}
+              onEditVehicle={handleEditVehicle}
+              onOpenSafetyModal={handleOpenSafetyModal}
+              onOpenDeployModal={handleOpenDeployModal}
+              onOpenVehicleHistory={handleOpenVehicleHistory}
+              onPlanBypass={handlePlanBypass}
+            />
+          </div>
+        )}
+
+        {/* ========================================================= */}
+        {/* SCREEN 3: FLEET (Corridor Telemetry & Multi-Tenant Ledger) */}
+        {/* ========================================================= */}
+        {adminActiveTab === 'FLEET' && (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 animate-fade-in">
             <CorridorTelemetryLedger
               selectedVehicleId={selectedVehicleId}
               onSelectVehicle={(id) => {
                 setSelectedVehicleId(id);
-                const el = document.getElementById('gis-map');
-                if (el) el.scrollIntoView({ behavior: 'smooth' });
+                handleSelectTab('MAP');
               }}
               onEditVehicle={handleEditVehicle}
               onOpenSafetyModal={handleOpenSafetyModal}
@@ -265,165 +379,83 @@ export default function AdminDashboard() {
               onOpenDeploymentDetails={handleOpenDeploymentDetails}
               onOpenVehicleHistory={handleOpenVehicleHistory}
             />
-          </section>
-        </main>
-
-        {/* ==================== ADMIN MOBILE BOTTOM NAVIGATION (Reference Screen 2 & 3) ==================== */}
-        <AdminMobileNav
-          activeTab={adminActiveTab}
-          onSelectTab={handleMobileNavSelect}
-          alertCount={alerts ? alerts.length : 0}
-          fleetCount={vehicles ? vehicles.length : 0}
-          onOpenMore={() => setAdminMoreSheetOpen(true)}
-        />
-
-        {/* ==================== ADMIN MORE ACTION SHEET ==================== */}
-        {adminMoreSheetOpen && (
-          <div
-            className="lg:hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-end justify-center animate-fade-in"
-            onClick={() => setAdminMoreSheetOpen(false)}
-          >
-            <div
-              className="w-full bg-white rounded-t-2xl p-5 shadow-2xl pb-safe space-y-3"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto mb-3"></div>
-              <h3 className="font-heading font-bold text-sm text-[#0B1220] mb-2">Command Center Tools</h3>
-
-              <div className="grid grid-cols-1 gap-2.5">
-                <button
-                  onClick={() => {
-                    setAdminMoreSheetOpen(false);
-                    setIsRoutePlannerOpen(true);
-                  }}
-                  className="w-full py-3 px-4 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-800 font-bold text-xs rounded-xl flex items-center justify-between touch-target"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-base">⚡</span>
-                    <div className="text-left">
-                      <span className="block font-bold">Route Feasibility Planner</span>
-                      <span className="text-[10px] text-blue-600 block">AI bypass computation</span>
-                    </div>
-                  </div>
-                  <span>→</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setAdminMoreSheetOpen(false);
-                    setIsVehicleModalOpen(true);
-                  }}
-                  className="w-full py-3 px-4 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-800 font-semibold text-xs rounded-xl flex items-center justify-between touch-target"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-base font-bold">+</span>
-                    <div className="text-left">
-                      <span className="block font-bold">Deploy Regional Vehicle</span>
-                      <span className="text-[10px] text-slate-500 block">Dispatch fleet units</span>
-                    </div>
-                  </div>
-                  <span>→</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setAdminMoreSheetOpen(false);
-                    setIsReportModalOpen(true);
-                  }}
-                  className="w-full py-3 px-4 bg-red-50 hover:bg-red-100 border border-red-200 text-red-800 font-semibold text-xs rounded-xl flex items-center justify-between touch-target"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="material-symbols-outlined text-base text-red-600">report_problem</span>
-                    <div className="text-left">
-                      <span className="block font-bold">Report Field Disruption</span>
-                      <span className="text-[10px] text-red-600 block">Broadcast verified incident</span>
-                    </div>
-                  </div>
-                  <span>→</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setAdminMoreSheetOpen(false);
-                    if (vehicles && vehicles.length > 0) {
-                      handleOpenSafetyModal(vehicles[0].id);
-                    }
-                  }}
-                  className="w-full py-3 px-4 bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-800 font-semibold text-xs rounded-xl flex items-center justify-between touch-target"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-base">🎙️</span>
-                    <div className="text-left">
-                      <span className="block font-bold">Track 4: Driver Voice Safety AI</span>
-                      <span className="text-[10px] text-purple-600 block">Outbound telemetry & safety eval</span>
-                    </div>
-                  </div>
-                  <span>→</span>
-                </button>
-              </div>
-
-              <button
-                onClick={() => setAdminMoreSheetOpen(false)}
-                className="w-full py-2.5 text-center text-xs font-semibold text-slate-600 hover:text-slate-900 touch-target mt-2"
-              >
-                Close
-              </button>
-            </div>
           </div>
         )}
 
-        {/* Dynamic Route Planner Modal */}
-        <RoutePlannerModal
-          isOpen={isRoutePlannerOpen}
-          onClose={() => setIsRoutePlannerOpen(false)}
-          defaultOrigin={routePlannerOrigin}
-          defaultDestination={routePlannerDestination}
-          onRouteCalculated={handleRouteProjected}
-        />
+        {/* ========================================================= */}
+        {/* SCREEN 4: ALERTS (Disruptions & Hazards List) */}
+        {/* ========================================================= */}
+        {adminActiveTab === 'ALERTS' && (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 animate-fade-in">
+            <AlertPanel
+              selectedIncidentId={selectedIncidentId}
+              onSelectIncident={(id) => {
+                setSelectedIncidentId(id);
+                handleSelectTab('MAP');
+              }}
+              onPlanBypass={handlePlanBypass}
+            />
+          </div>
+        )}
 
-        {/* Vehicle Registration & Telemetry Ingest Modal */}
-        <VehicleManager
-          isOpen={isVehicleModalOpen}
-          onClose={() => setIsVehicleModalOpen(false)}
-          onVehicleCreated={handleVehicleCreated}
-          editingVehicleId={editingVehicleId}
-          onCloseEdit={() => setEditingVehicleId(null)}
-        />
+        {/* ========================================================= */}
+        {/* SCREEN 5: MORE (District Accessibility Scorecard & Details) */}
+        {/* ========================================================= */}
+        {adminActiveTab === 'MORE' && (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 space-y-5 animate-fade-in">
+            <DistrictAccessibility />
+          </div>
+        )}
+      </main>
 
-        {/* Operational Deploy Vehicle Modal */}
-        <DeployVehicleModal
-          isOpen={isDeployModalOpen}
-          onClose={() => setIsDeployModalOpen(false)}
-          preselectedVehicleId={deployPreselectedVehicleId}
-          onDeploymentCreated={handleDeploymentCreated}
-        />
+      {/* ==================== ADMIN MOBILE BOTTOM NAVIGATION ==================== */}
+      <AdminMobileNav
+        activeTab={adminActiveTab}
+        onSelectTab={handleSelectTab}
+        alertCount={alerts ? alerts.length : 0}
+        fleetCount={vehicles ? vehicles.length : 0}
+      />
 
-        {/* Deployment Details & Journey History Modal */}
-        <DeploymentDetailsModal
-          isOpen={isDetailsModalOpen}
-          onClose={() => {
-            setIsDetailsModalOpen(false);
-            setDetailsDeploymentId(null);
-            setDetailsVehicleId(null);
-          }}
-          deploymentId={detailsDeploymentId}
-          vehicleId={detailsVehicleId}
-        />
+      {/* ==================== MODALS ==================== */}
+      <IncidentReportingModal
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        onIncidentCreated={handleIncidentCreated}
+      />
 
-        {/* Field Officer Incident Ingest Modal */}
-        <IncidentReportingModal
-          isOpen={isReportModalOpen}
-          onClose={() => setIsReportModalOpen(false)}
-          onIncidentCreated={handleIncidentCreated}
-        />
+      <DeployVehicleModal
+        isOpen={isDeployModalOpen}
+        preselectedVehicleId={deployPreselectedVehicleId}
+        onClose={() => {
+          setIsDeployModalOpen(false);
+          setDeployPreselectedVehicleId(null);
+        }}
+        onDeploymentCreated={handleDeploymentCreated}
+      />
 
-        {/* Track 4: Driver Safety AI Voice Modal */}
-        <DriverSafetyModal
-          isOpen={isSafetyModalOpen}
-          vehicleId={safetyVehicleId}
-          onClose={() => setIsSafetyModalOpen(false)}
-        />
-      </div>
-    </>
+      <DeploymentDetailsModal
+        isOpen={isDetailsModalOpen}
+        deploymentId={detailsDeploymentId}
+        vehicleId={detailsVehicleId}
+        onClose={() => setIsDetailsModalOpen(false)}
+      />
+
+      <RoutePlannerModal
+        isOpen={isRoutePlannerOpen}
+        initialOrigin={routePlannerOrigin}
+        initialDestination={routePlannerDestination}
+        onClose={() => setIsRoutePlannerOpen(false)}
+        onRouteProjected={handleRouteProjected}
+      />
+
+      <DriverSafetyModal
+        isOpen={isSafetyModalOpen}
+        vehicleId={safetyVehicleId}
+        onClose={() => {
+          setIsSafetyModalOpen(false);
+          setSafetyVehicleId(null);
+        }}
+      />
+    </div>
   );
 }

@@ -1,4 +1,6 @@
 import React from 'react';
+import { formatIST } from '../../utils/timeFormat';
+import { IconDeployments } from '../common/AppIcons';
 
 export default function UserDeploymentDetailsModal({ isOpen, deployment, onClose, onComplete, onCancel }) {
   if (!isOpen || !deployment) return null;
@@ -7,17 +9,15 @@ export default function UserDeploymentDetailsModal({ isOpen, deployment, onClose
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-xl w-full p-6 sm:p-8 animate-in fade-in zoom-in-95 duration-200 my-8">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-xl w-full p-6 sm:p-8 animate-in fade-in zoom-in-95 duration-200 my-8 font-sans">
         <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-6">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-              </svg>
+              <IconDeployments className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-xl font-heading font-bold text-slate-900">Journey Manifest</h2>
+                <h2 className="text-xl font-heading font-bold text-slate-900">Journey Manifest Details</h2>
                 <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                   deployment.status === 'COMPLETED'
                     ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
@@ -33,11 +33,9 @@ export default function UserDeploymentDetailsModal({ isOpen, deployment, onClose
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 p-2 rounded-lg hover:bg-slate-100 transition-colors"
+            className="text-slate-400 hover:text-slate-600 p-2 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            ✕
           </button>
         </div>
 
@@ -45,7 +43,7 @@ export default function UserDeploymentDetailsModal({ isOpen, deployment, onClose
           {/* Corridor Route Banner */}
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
             <div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Origin Hub</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Origin Gateway</span>
               <p className="font-heading font-bold text-slate-900 text-sm mt-0.5">{deployment.origin}</p>
             </div>
             <div className="flex flex-col items-center px-4">
@@ -59,7 +57,7 @@ export default function UserDeploymentDetailsModal({ isOpen, deployment, onClose
               </div>
             </div>
             <div className="text-right">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Destination</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Destination Hub</span>
               <p className="font-heading font-bold text-slate-900 text-sm mt-0.5">{deployment.destination}</p>
             </div>
           </div>
@@ -75,7 +73,7 @@ export default function UserDeploymentDetailsModal({ isOpen, deployment, onClose
               <span className="font-semibold text-slate-800">{deployment.priority || 'NORMAL'}</span>
             </div>
             <div className="p-3 bg-white border border-slate-200 rounded-xl">
-              <span className="text-slate-400 block mb-1">Cargo Manifest</span>
+              <span className="text-slate-400 block mb-1">Cargo Payload</span>
               <span className="font-medium text-slate-800">{deployment.cargo || 'General Freight'}</span>
             </div>
             <div className="p-3 bg-white border border-slate-200 rounded-xl">
@@ -84,16 +82,20 @@ export default function UserDeploymentDetailsModal({ isOpen, deployment, onClose
             </div>
           </div>
 
-          {/* Timestamps */}
+          {/* Timestamps in IST */}
           <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1">
             <div className="flex justify-between text-slate-600">
-              <span>Initiated:</span>
-              <span className="font-mono text-slate-800">{deployment.startTime ? new Date(deployment.startTime).toLocaleString() : 'N/A'}</span>
+              <span>Initiated (IST):</span>
+              <span className="font-mono font-semibold text-slate-800">
+                {formatIST(deployment.startTime || deployment.startedAt || deployment.createdAt, 'full')}
+              </span>
             </div>
-            {deployment.endTime && (
+            {(deployment.endTime || deployment.completedAt) && (
               <div className="flex justify-between text-slate-600">
-                <span>Completed / Closed:</span>
-                <span className="font-mono text-slate-800">{new Date(deployment.endTime).toLocaleString()}</span>
+                <span>Completed / Closed (IST):</span>
+                <span className="font-mono font-semibold text-slate-800">
+                  {formatIST(deployment.endTime || deployment.completedAt, 'full')}
+                </span>
               </div>
             )}
           </div>

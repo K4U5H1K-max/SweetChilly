@@ -1,6 +1,18 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import L from 'leaflet';
 import { useApp } from '../context/AppContext';
+import { formatIST } from '../utils/timeFormat';
+import {
+  IconMap,
+  IconTruck,
+  IconWarning,
+  IconWeather,
+  IconRoute,
+  IconShield,
+  IconPin,
+  IconClose,
+} from './common/AppIcons';
+import InfoPopover from './common/InfoPopover';
 
 export default function MapplsGISMap({
   selectedIncidentId,
@@ -11,6 +23,8 @@ export default function MapplsGISMap({
   onOpenSafetyModal,
   onOpenDeployModal,
   onOpenVehicleHistory,
+  onPlanBypass,
+  fullHeight = false,
 }) {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -19,11 +33,12 @@ export default function MapplsGISMap({
   const vehiclesLayerRef = useRef(null);
   const hubsLayerRef = useRef(null);
   const routeLayerRef = useRef(null);
+  const weatherLayerRef = useRef(null);
 
   const incidentMarkersMapRef = useRef(new Map());
   const vehicleMarkersMapRef = useRef(new Map());
 
-  const { incidents, alerts, vehicles, corridors, cities, activeRoute, setActiveRoute } = useApp();
+  const { incidents, alerts, vehicles, corridors, cities, weather, activeRoute, setActiveRoute } = useApp();
 
   const [layers, setLayers] = useState({
     incidents: true,
@@ -31,7 +46,10 @@ export default function MapplsGISMap({
     corridors: true,
     hubs: true,
     route: true,
+    weather: false,
   });
+
+  const [selectedItem, setSelectedItem] = useState(null); // { type: 'INCIDENT' | 'VEHICLE' | 'WEATHER', data: ... }
 
   const mapplsApiKey = import.meta.env.VITE_MAPPLS_API_KEY;
 
@@ -82,6 +100,7 @@ export default function MapplsGISMap({
       routeLayerRef.current = L.layerGroup().addTo(map);
       incidentsLayerRef.current = L.layerGroup().addTo(map);
       vehiclesLayerRef.current = L.layerGroup().addTo(map);
+      weatherLayerRef.current = L.layerGroup().addTo(map);
 
       mapInstanceRef.current = map;
     }
@@ -207,7 +226,7 @@ export default function MapplsGISMap({
             <span class="text-[11px] text-slate-500 font-mono">${city.state}</span>
           </div>
           <div class="font-bold text-slate-900 text-sm mb-1">${city.name}</div>
-          <div class="text-xs text-slate-600 mb-2">${city.description || 'Key logistics and transit node'}</div>
+          <div class="text-xs text-slate-600 mb-2">${city.hubType || 'Key logistics node'}</div>
           <div class="text-[11px] font-mono text-slate-500">
             ${city.lat.toFixed(4)}°N, ${city.lng.toFixed(4)}°E
           </div>
@@ -247,11 +266,6 @@ export default function MapplsGISMap({
             }">
               <span class="text-xs font-bold">!</span>
             </div>
-            ${
-              isSelected
-                ? '<div class="absolute -top-7 px-2 py-0.5 rounded bg-slate-900 text-white text-[10px] font-bold shadow-md whitespace-nowrap">Selected</div>'
-                : ''
-            }
           </div>
         `,
         iconSize: [24, 24],
@@ -260,40 +274,8 @@ export default function MapplsGISMap({
 
       const marker = L.marker([inc.lat, inc.lng], { icon: markerIcon });
 
-      const popupHtml = `
-        <div class="p-3.5 bg-white min-w-[260px] font-sans">
-          <div class="flex items-center justify-between border-b border-slate-100 pb-2 mb-2">
-            <span class="font-mono text-[10px] font-bold text-slate-500">${inc.id}</span>
-            <span class="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
-              isCritical
-                ? 'bg-rose-100 text-rose-800'
-                : 'bg-amber-100 text-amber-800'
-            }">
-              ${inc.severity}
-            </span>
-          </div>
-          <div class="font-bold text-slate-900 text-sm mb-1">${inc.type}</div>
-          <div class="text-xs text-slate-700 font-medium mb-1.5">${inc.location || 'Highway Corridor'}</div>
-          <p class="text-xs text-slate-600 mb-2 leading-relaxed">${inc.description}</p>
-          
-          ${
-            inc.imageUrl
-              ? `<div class="mb-2 rounded-lg overflow-hidden border border-slate-200">
-                  <img src="${inc.imageUrl}" alt="${inc.type}" class="w-full h-24 object-cover" />
-                </div>`
-              : ''
-          }
-          
-          <div class="text-[11px] font-mono text-slate-400 pt-1 border-t border-slate-100 flex justify-between">
-            <span>${inc.lat.toFixed(4)}°N, ${inc.lng.toFixed(4)}°E</span>
-            <span class="text-slate-600">${inc.status}</span>
-          </div>
-        </div>
-      `;
-
-      marker.bindPopup(popupHtml, { className: 'govtech-popup' });
-
       marker.on('click', () => {
+        setSelectedItem({ type: 'INCIDENT', data: inc });
         if (onSelectIncident) {
           onSelectIncident(inc.id);
         }
@@ -310,7 +292,9 @@ export default function MapplsGISMap({
     vehiclesLayerRef.current.clearLayers();
     vehicleMarkersMapRef.current.clear();
 
-    // Operational GIS map only displays vehicles with an active deployment
+    if (!layers.vehicles) return;
+
+    // Operational GIS map displays vehicles with active deployment or registered in fleet
     const activeVehicles = vehicles.filter((veh) => {
       if (veh.hasActiveDeployment !== undefined) {
         return Boolean(veh.hasActiveDeployment);
@@ -328,12 +312,11 @@ export default function MapplsGISMap({
       const statusNormalized = String(veh.status || 'IN_TRANSIT').toUpperCase().replace(/\s+/g, '_');
       const isEmergency = veh.priority === 'EMERGENCY_CRITICAL' || statusNormalized === 'EMERGENCY';
       const isDelayed = statusNormalized === 'DELAYED';
-      const isSafetyAlert = veh.isFlagged || veh.safetyStatus === 'BREAKDOWN' || veh.safetyStatus === 'ASSISTANCE_REQUIRED' || veh.safetyStatus === 'ROAD_BLOCKED';
+      const isSafetyAlert = veh.isFlagged || veh.safetyStatus === 'BREAKDOWN' || veh.safetyStatus === 'ASSISTANCE_REQUIRED';
 
       let markerBg = 'bg-slate-900';
       if (isEmergency || veh.safetyStatus === 'ASSISTANCE_REQUIRED') markerBg = 'bg-rose-600';
-      else if (isSafetyAlert) markerBg = 'bg-amber-600';
-      else if (isDelayed) markerBg = 'bg-amber-600';
+      else if (isSafetyAlert || isDelayed) markerBg = 'bg-amber-600';
 
       const vehicleIcon = L.divIcon({
         className: 'custom-vehicle-marker',
@@ -352,11 +335,6 @@ export default function MapplsGISMap({
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1" />
               </svg>
             </div>
-            ${
-              isSelected
-                ? '<div class="absolute -top-7 px-2 py-0.5 rounded bg-blue-700 text-white text-[10px] font-bold shadow-md whitespace-nowrap">Tracking</div>'
-                : ''
-            }
           </div>
         `,
         iconSize: [28, 28],
@@ -365,133 +343,8 @@ export default function MapplsGISMap({
 
       const marker = L.marker([veh.currentPos.lat, veh.currentPos.lng], { icon: vehicleIcon });
 
-      const safetyStatusText = (veh.safetyStatus || 'NOT_CHECKED').replace('_', ' ');
-      let safetyBadgeClass = 'bg-slate-100 text-slate-700';
-      if (veh.safetyStatus === 'SAFE') safetyBadgeClass = 'bg-emerald-100 text-emerald-800';
-      else if (veh.safetyStatus === 'BREAKDOWN') safetyBadgeClass = 'bg-rose-100 text-rose-800 font-bold';
-      else if (veh.safetyStatus === 'ASSISTANCE_REQUIRED') safetyBadgeClass = 'bg-red-100 text-red-900 font-bold animate-pulse';
-      else if (veh.isFlagged) safetyBadgeClass = 'bg-amber-100 text-amber-800 font-bold';
-
-      const isAvailable = veh.deploymentStatus === 'AVAILABLE' || !veh.hasActiveDeployment;
-      const depStatusText = veh.deploymentStatus || (isAvailable ? 'AVAILABLE' : 'ACTIVE');
-
-      const popupHtml = `
-        <div class="p-3.5 bg-white min-w-[280px] font-sans">
-          <div class="flex items-center justify-between border-b border-slate-100 pb-2 mb-2">
-            <span class="font-mono text-[10px] font-bold text-slate-500">${veh.id}</span>
-            <div class="flex items-center gap-1">
-              <span class="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
-                isAvailable
-                  ? 'bg-emerald-100 text-emerald-800'
-                  : 'bg-blue-100 text-blue-800'
-              }">
-                ${depStatusText}
-              </span>
-            </div>
-          </div>
-          <div class="font-bold text-slate-900 text-sm mb-0.5">${veh.name}</div>
-          <div class="text-xs text-slate-600 mb-2">
-            ${
-              isAvailable
-                ? `<span class="italic text-slate-500">Idle / Ready for Dispatch</span>`
-                : `<span class="font-medium">${veh.origin}</span> → <span class="font-medium">${veh.destination}</span>`
-            }
-          </div>
-
-          <div class="bg-slate-50 p-2 rounded-md border border-slate-100 text-xs space-y-1 mb-2">
-            <div class="flex justify-between">
-              <span class="text-slate-500">Driver:</span>
-              <span class="font-semibold text-slate-800">${veh.driverName || 'Operator'}</span>
-            </div>
-            ${
-              veh.assignedCorridor && !isAvailable
-                ? `<div class="flex justify-between">
-                    <span class="text-slate-500">Corridor:</span>
-                    <span class="font-semibold text-slate-800">${veh.assignedCorridor}</span>
-                  </div>`
-                : ''
-            }
-            <div class="flex justify-between">
-              <span class="text-slate-500">Safety State:</span>
-              <span class="px-1.5 py-0.2 rounded text-[10px] font-bold ${safetyBadgeClass}">${safetyStatusText}</span>
-            </div>
-            ${
-              veh.isFlagged && veh.flagReason
-                ? `<div class="p-1 bg-amber-50 border border-amber-200 text-amber-900 text-[11px] rounded">
-                    🚩 <span class="font-semibold">${veh.flagReason}</span>
-                  </div>`
-                : ''
-            }
-            <div class="flex justify-between">
-              <span class="text-slate-500">Payload:</span>
-              <span class="font-semibold text-slate-800">${veh.cargo || 'Relief Supplies'} (${veh.capacity || '5T'})</span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-slate-500">Speed:</span>
-              <span class="font-mono font-bold text-slate-800">${veh.speedKmH || 0} km/h</span>
-            </div>
-            ${
-              veh.delayEstMinutes > 0
-                ? `<div class="flex justify-between text-rose-600 font-bold">
-                    <span>Est. Delay:</span>
-                    <span>+${veh.delayEstMinutes} mins</span>
-                  </div>`
-                : ''
-            }
-          </div>
-          <div class="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
-            <span class="text-[10px] font-mono text-slate-400">
-              ${veh.currentPos.lat.toFixed(3)}°N, ${veh.currentPos.lng.toFixed(3)}°E
-            </span>
-            <div class="flex items-center gap-1">
-              ${
-                isAvailable && onOpenDeployModal
-                  ? `<button id="deploy-veh-btn-${veh.id}" class="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors">
-                      ⚡ Deploy
-                    </button>`
-                  : ''
-              }
-              ${
-                onOpenVehicleHistory
-                  ? `<button id="hist-veh-btn-${veh.id}" class="px-2 py-1 rounded bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-semibold transition-colors">
-                      History
-                    </button>`
-                  : ''
-              }
-              ${
-                onOpenSafetyModal
-                  ? `<button id="safety-veh-btn-${veh.id}" class="px-2 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition-colors">
-                      📞 Safety
-                    </button>`
-                  : ''
-              }
-            </div>
-          </div>
-        </div>
-      `;
-
-      marker.bindPopup(popupHtml, { className: 'govtech-popup' });
-
-      marker.on('popupopen', () => {
-        const editBtn = document.getElementById(`edit-veh-btn-${veh.id}`);
-        if (editBtn && onEditVehicle) {
-          editBtn.onclick = () => onEditVehicle(veh.id);
-        }
-        const safetyBtn = document.getElementById(`safety-veh-btn-${veh.id}`);
-        if (safetyBtn && onOpenSafetyModal) {
-          safetyBtn.onclick = () => onOpenSafetyModal(veh.id);
-        }
-        const deployBtn = document.getElementById(`deploy-veh-btn-${veh.id}`);
-        if (deployBtn && onOpenDeployModal) {
-          deployBtn.onclick = () => onOpenDeployModal(veh.id);
-        }
-        const histBtn = document.getElementById(`hist-veh-btn-${veh.id}`);
-        if (histBtn && onOpenVehicleHistory) {
-          histBtn.onclick = () => onOpenVehicleHistory(veh.id);
-        }
-      });
-
       marker.on('click', () => {
+        setSelectedItem({ type: 'VEHICLE', data: veh });
         if (onSelectVehicle) {
           onSelectVehicle(veh.id);
         }
@@ -500,7 +353,52 @@ export default function MapplsGISMap({
       vehiclesLayerRef.current.addLayer(marker);
       vehicleMarkersMapRef.current.set(veh.id, marker);
     });
-  }, [vehicles, layers.vehicles, selectedVehicleId, onSelectVehicle, onEditVehicle, onOpenSafetyModal, onOpenDeployModal, onOpenVehicleHistory]);
+  }, [vehicles, layers.vehicles, selectedVehicleId, onSelectVehicle]);
+
+  // Update Corridor Weather Markers
+  useEffect(() => {
+    if (!mapInstanceRef.current || !weatherLayerRef.current) return;
+    weatherLayerRef.current.clearLayers();
+
+    if (!layers.weather || !weather || weather.length === 0) return;
+
+    weather.forEach((w) => {
+      const matchedCorridor = corridors.find((c) => c.id === w.corridorId);
+      if (!matchedCorridor || !matchedCorridor.coordinates || matchedCorridor.coordinates.length === 0) return;
+
+      const midIndex = Math.floor(matchedCorridor.coordinates.length / 2);
+      const midCoord = matchedCorridor.coordinates[midIndex];
+
+      const isHighRisk = w.landslideRisk === 'CRITICAL' || w.landslideRisk === 'HIGH';
+
+      const weatherIcon = L.divIcon({
+        className: 'custom-weather-marker',
+        html: `
+          <div class="relative flex items-center justify-center cursor-pointer">
+            <div class="px-2 py-1 rounded-lg ${
+              isHighRisk ? 'bg-amber-900/90 text-amber-200' : 'bg-blue-900/90 text-blue-100'
+            } border border-white/40 shadow-md text-[10px] font-mono flex items-center gap-1 backdrop-blur-xs">
+              <span>🌧️</span>
+              <span>${w.rainfallMm}mm</span>
+            </div>
+          </div>
+        `,
+        iconSize: [50, 20],
+        iconAnchor: [25, 10],
+      });
+
+      const marker = L.marker(midCoord, { icon: weatherIcon });
+
+      marker.on('click', () => {
+        setSelectedItem({
+          type: 'WEATHER',
+          data: { ...w, corridorName: matchedCorridor.name },
+        });
+      });
+
+      weatherLayerRef.current.addLayer(marker);
+    });
+  }, [weather, corridors, layers.weather]);
 
   // Update AI Projected Active Route
   useEffect(() => {
@@ -511,7 +409,6 @@ export default function MapplsGISMap({
 
     const latLngs = [];
 
-    // Collect waypoints
     if (activeRoute.waypoints && activeRoute.waypoints.length > 0) {
       activeRoute.waypoints.forEach((wp) => {
         if (wp.lat && wp.lng) {
@@ -543,39 +440,6 @@ export default function MapplsGISMap({
     });
     routeLayerRef.current.addLayer(mainLine);
 
-    // Waypoint Markers
-    activeRoute.waypoints.forEach((wp, idx) => {
-      const isDetour = wp.type === 'DETOUR';
-      const isEnd = wp.type === 'ORIGIN' || wp.type === 'DESTINATION';
-
-      let bg = 'bg-blue-600';
-      if (isDetour) bg = 'bg-amber-500';
-      if (isEnd) bg = 'bg-slate-900';
-
-      const wpIcon = L.divIcon({
-        className: 'custom-wp-marker',
-        html: `
-          <div class="relative flex items-center justify-center">
-            <div class="w-5 h-5 rounded-full ${bg} text-white flex items-center justify-center font-bold text-[10px] shadow-md border-2 border-white">
-              ${idx + 1}
-            </div>
-          </div>
-        `,
-        iconSize: [20, 20],
-        iconAnchor: [10, 10],
-      });
-
-      const marker = L.marker([wp.lat, wp.lng], { icon: wpIcon });
-      marker.bindPopup(
-        `<div class="p-2.5 font-sans">
-          <div class="text-[10px] font-bold uppercase text-slate-500">Waypoint ${idx + 1} (${wp.type})</div>
-          <div class="font-bold text-slate-900 text-xs">${wp.name}</div>
-          <div class="text-[11px] text-slate-600">${wp.note || 'Nominal Passable'}</div>
-        </div>`
-      );
-      routeLayerRef.current.addLayer(marker);
-    });
-
     // Auto-fit bounds
     try {
       const bounds = L.latLngBounds(latLngs);
@@ -591,10 +455,7 @@ export default function MapplsGISMap({
     const targetInc = incidents.find((i) => i.id === selectedIncidentId);
     if (targetInc) {
       mapInstanceRef.current.flyTo([targetInc.lat, targetInc.lng], 10, { duration: 0.8 });
-      const marker = incidentMarkersMapRef.current.get(selectedIncidentId);
-      if (marker) {
-        setTimeout(() => marker.openPopup(), 850);
-      }
+      setSelectedItem({ type: 'INCIDENT', data: targetInc });
     }
   }, [selectedIncidentId, incidents]);
 
@@ -602,26 +463,23 @@ export default function MapplsGISMap({
   useEffect(() => {
     if (!selectedVehicleId || !mapInstanceRef.current) return;
     const targetVeh = vehicles.find((v) => v.id === selectedVehicleId);
-    if (targetVeh) {
+    if (targetVeh && targetVeh.currentPos) {
       mapInstanceRef.current.flyTo([targetVeh.currentPos.lat, targetVeh.currentPos.lng], 10, { duration: 0.8 });
-      const marker = vehicleMarkersMapRef.current.get(selectedVehicleId);
-      if (marker) {
-        setTimeout(() => marker.openPopup(), 850);
-      }
+      setSelectedItem({ type: 'VEHICLE', data: targetVeh });
     }
   }, [selectedVehicleId, vehicles]);
 
   return (
-    <div className="w-full bg-white rounded-xl border border-slate-200/90 shadow-xs flex flex-col relative overflow-hidden">
+    <div className="w-full bg-white rounded-2xl border border-slate-200/90 shadow-card flex flex-col relative overflow-hidden font-sans">
       {/* Top Map Control Bar */}
-      <div className="border-b border-slate-100 bg-slate-50/80 px-4 py-2.5 flex flex-wrap items-center justify-between gap-2.5">
+      <div className="border-b border-slate-100 bg-slate-50/90 px-3.5 sm:px-4 py-2.5 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
           <span className="font-heading font-bold text-xs text-slate-800">
-            North East operations map
+            Regional GIS Operations Map
           </span>
-          <span className="text-slate-300">|</span>
-          <span className="text-xs text-slate-500 hidden sm:inline">Live incidents, fleet movement and corridor status</span>
+          <span className="text-slate-300 hidden sm:inline">•</span>
+          <span className="text-xs text-slate-500 hidden sm:inline">Spatial Intelligence</span>
         </div>
 
         {/* Layer Filters */}
@@ -629,30 +487,30 @@ export default function MapplsGISMap({
           {activeRoute && (
             <button
               onClick={() => setLayers((prev) => ({ ...prev, route: !prev.route }))}
-              className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all whitespace-nowrap ${
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
                 layers.route
                   ? 'bg-blue-600 text-white shadow-xs'
                   : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
               }`}
             >
-              Active route
+              Route
             </button>
           )}
 
           <button
             onClick={() => setLayers((prev) => ({ ...prev, incidents: !prev.incidents }))}
-            className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all whitespace-nowrap ${
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
               layers.incidents
                 ? 'bg-rose-600 text-white shadow-xs'
                 : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
             }`}
           >
-            Incidents ({incidents.length})
+            Disruptions ({incidents.length})
           </button>
 
           <button
             onClick={() => setLayers((prev) => ({ ...prev, vehicles: !prev.vehicles }))}
-            className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all whitespace-nowrap ${
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
               layers.vehicles
                 ? 'bg-slate-900 text-white shadow-xs'
                 : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
@@ -662,22 +520,22 @@ export default function MapplsGISMap({
           </button>
 
           <button
-            onClick={() => setLayers((prev) => ({ ...prev, corridors: !prev.corridors }))}
-            className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all whitespace-nowrap ${
-              layers.corridors
-                ? 'bg-slate-700 text-white shadow-xs'
+            onClick={() => setLayers((prev) => ({ ...prev, weather: !prev.weather }))}
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              layers.weather
+                ? 'bg-indigo-600 text-white shadow-xs'
                 : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
             }`}
           >
-            Corridors ({corridors.length})
+            Weather
           </button>
 
           <button
             onClick={handleRecenter}
             title="Reset Map to Regional NER View"
-            className="px-2.5 py-1 rounded-md bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 text-xs font-semibold transition-all whitespace-nowrap"
+            className="px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 text-xs font-bold transition-all whitespace-nowrap cursor-pointer"
           >
-            ↺ Recenter
+            ↺ Reset
           </button>
         </div>
       </div>
@@ -686,32 +544,32 @@ export default function MapplsGISMap({
       <div className="relative w-full">
         <div
           ref={mapContainerRef}
-          className="w-full h-[380px] sm:h-[480px] md:h-[580px] bg-slate-100 relative z-0"
+          className={`w-full ${fullHeight ? 'h-[520px] sm:h-[620px] md:h-[720px]' : 'h-[380px] sm:h-[480px] md:h-[560px]'} bg-slate-100 relative z-0`}
           style={{ minHeight: '340px' }}
         />
 
         {/* Floating Active Route Projection HUD */}
         {activeRoute && (
-          <div className="absolute top-4 right-4 z-400 bg-slate-900/95 text-white rounded-xl border border-slate-700 p-3.5 shadow-xl max-w-xs sm:max-w-sm font-sans backdrop-blur-md animate-fade-in">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-2">
+          <div className="absolute top-3 right-3 z-400 bg-slate-900/95 text-white rounded-xl border border-slate-700 p-3 shadow-xl max-w-xs sm:max-w-sm font-sans backdrop-blur-md animate-fade-in">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-1.5 mb-2">
               <span className="text-xs font-bold text-white flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-blue-400 inline-block animate-pulse"></span>
-                Active optimal route
+                Active Projected Route
               </span>
               <button
                 onClick={() => setActiveRoute(null)}
-                className="text-slate-400 hover:text-rose-400 text-xs font-bold px-1"
+                className="text-slate-400 hover:text-rose-400 text-xs font-bold px-1 cursor-pointer"
                 title="Clear Projected Route"
               >
-                ✕ Clear
+                ✕
               </button>
             </div>
 
-            <div className="font-bold text-sm text-white mb-1.5">
+            <div className="font-bold text-xs text-white mb-1.5 truncate">
               {activeRoute.recommendedCorridor}
             </div>
 
-            <div className="grid grid-cols-3 gap-2 text-xs bg-slate-800/80 p-2 rounded-lg border border-slate-700/80 mb-2 font-mono">
+            <div className="grid grid-cols-3 gap-1.5 text-xs bg-slate-800/80 p-2 rounded-lg border border-slate-700/80 font-mono text-[11px]">
               <div>
                 <span className="text-slate-400 block text-[9px]">Distance:</span>
                 <span className="font-bold">{activeRoute.distanceKm} km</span>
@@ -725,10 +583,115 @@ export default function MapplsGISMap({
                 <span className="font-bold text-emerald-400">+{activeRoute.delayAvoidedMinutes || 180}m</span>
               </div>
             </div>
+          </div>
+        )}
 
-            {activeRoute.avoidedIncidents?.length > 0 && (
-              <div className="text-[11px] text-rose-300 flex items-center gap-1">
-                <span>⚠️ Bypassing: {activeRoute.avoidedIncidents[0].split('(')[0]}</span>
+        {/* Selected-Item Floating Detail Bottom Sheet / Card */}
+        {selectedItem && (
+          <div className="absolute bottom-3 left-3 right-3 sm:left-auto sm:right-3 sm:max-w-sm z-400 bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200/90 shadow-2xl p-4 animate-in slide-in-from-bottom-3 duration-200 text-left">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100 mb-2.5">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase bg-slate-900 text-white font-mono">
+                  {selectedItem.type}
+                </span>
+                <span className="text-xs font-mono font-bold text-slate-600">
+                  {selectedItem.data.id || selectedItem.data.licensePlate || selectedItem.data.corridorId}
+                </span>
+              </div>
+              <button
+                onClick={() => setSelectedItem(null)}
+                className="w-6 h-6 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center text-xs font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* INCIDENT CARD */}
+            {selectedItem.type === 'INCIDENT' && (
+              <div className="space-y-2">
+                <h4 className="font-heading font-bold text-xs sm:text-sm text-slate-900 leading-tight">
+                  {selectedItem.data.title || selectedItem.data.type}
+                </h4>
+                <p className="text-[11px] text-slate-600 leading-relaxed">
+                  {selectedItem.data.description}
+                </p>
+                <div className="flex items-center justify-between text-[11px] font-mono text-slate-500 pt-1 border-t border-slate-100">
+                  <span>Reported: {formatIST(selectedItem.data.reportedAt, 'timeOnly')}</span>
+                  <span className="font-bold text-rose-600 uppercase">{selectedItem.data.severity}</span>
+                </div>
+                {onPlanBypass && (
+                  <button
+                    onClick={() => {
+                      onPlanBypass(selectedItem.data);
+                      setSelectedItem(null);
+                    }}
+                    className="w-full mt-1 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <IconRoute className="w-3.5 h-3.5" />
+                    <span>Calculate Tactical Bypass</span>
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* VEHICLE CARD */}
+            {selectedItem.type === 'VEHICLE' && (
+              <div className="space-y-2 text-xs">
+                <div className="flex justify-between items-center">
+                  <span className="font-bold text-slate-900 text-sm">{selectedItem.data.licensePlate || selectedItem.data.id}</span>
+                  <span className="text-emerald-700 font-bold">{selectedItem.data.speedKmH || 0} km/h</span>
+                </div>
+                <div className="text-slate-600">
+                  Route: <strong>{selectedItem.data.origin || 'Depot'} → {selectedItem.data.destination || 'Hub'}</strong>
+                </div>
+                <div className="text-slate-500 text-[11px]">
+                  Driver: {selectedItem.data.driverName} • {selectedItem.data.driverPhone}
+                </div>
+                <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+                  {onOpenSafetyModal && (
+                    <button
+                      onClick={() => onOpenSafetyModal(selectedItem.data.id)}
+                      className="flex-1 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors text-center text-xs"
+                    >
+                      Safety Check
+                    </button>
+                  )}
+                  {onOpenDeployModal && (
+                    <button
+                      onClick={() => onOpenDeployModal(selectedItem.data.id)}
+                      className="flex-1 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg transition-colors text-center text-xs"
+                    >
+                      Deploy
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* WEATHER CARD */}
+            {selectedItem.type === 'WEATHER' && (
+              <div className="space-y-2 text-xs">
+                <h4 className="font-heading font-bold text-slate-900">{selectedItem.data.corridorName || selectedItem.data.location}</h4>
+                <div className="grid grid-cols-2 gap-2 bg-slate-50 p-2 rounded-xl text-[11px] font-mono">
+                  <div>
+                    <span className="text-slate-400 block text-[9px]">Rainfall:</span>
+                    <span className="font-bold text-blue-700">{selectedItem.data.rainfallMm} mm</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[9px]">Visibility:</span>
+                    <span className="font-bold text-slate-700">{selectedItem.data.visibilityM} m</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[9px]">Condition:</span>
+                    <span className="font-bold text-slate-700">{selectedItem.data.condition}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[9px]">Landslide Risk:</span>
+                    <span className={`font-bold ${selectedItem.data.landslideRisk === 'CRITICAL' ? 'text-rose-600' : 'text-amber-600'}`}>
+                      {selectedItem.data.landslideRisk}
+                    </span>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -736,43 +699,38 @@ export default function MapplsGISMap({
       </div>
 
       {/* Bottom Map Legend */}
-      <div className="border-t border-slate-100 bg-slate-50/60 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600">
-        <div className="flex flex-wrap items-center gap-4">
+      <div className="border-t border-slate-100 bg-slate-50/70 px-3.5 sm:px-4 py-2 flex flex-wrap items-center justify-between gap-2.5 text-xs text-slate-600">
+        <div className="flex flex-wrap items-center gap-3">
           <span className="font-bold text-slate-700 text-xs">Legend:</span>
           
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-rose-600 inline-block"></span>
-            <span>Critical disruption</span>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
-            <span>Caution / delay</span>
+            <span>Disruption</span>
           </div>
 
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-slate-900 inline-block"></span>
-            <span>Fleet unit</span>
+            <span>Fleet</span>
           </div>
 
           <div className="flex items-center gap-1.5">
-            <span className="w-4 h-0.5 bg-rose-600 inline-block border-t border-dashed border-rose-300"></span>
-            <span>Blocked arterial</span>
+            <span className="w-3.5 h-0.5 bg-rose-600 inline-block border-t border-dashed border-rose-300"></span>
+            <span>Blocked Corridor</span>
           </div>
 
           <div className="flex items-center gap-1.5">
-            <span className="w-4 h-0.5 bg-slate-700 inline-block"></span>
-            <span>Passable corridor</span>
+            <span className="w-3.5 h-0.5 bg-slate-700 inline-block"></span>
+            <span>Open Highway</span>
           </div>
 
           <div className="flex items-center gap-1.5">
-            <span className="w-4 h-1 bg-blue-600 rounded-full inline-block"></span>
-            <span>Projected route</span>
+            <span className="w-3.5 h-1 bg-blue-600 rounded-full inline-block"></span>
+            <span>Active Route</span>
           </div>
         </div>
 
         <div className="text-[11px] text-slate-400 font-mono">
-          WGS-84 • Extent: 88°E - 97°E, 22°N - 29°N
+          WGS-84 • 8 NE States
         </div>
       </div>
     </div>

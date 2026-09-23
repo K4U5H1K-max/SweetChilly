@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import api from '../services/api';
+import { formatIST } from '../utils/timeFormat';
 
 export default function DeploymentDetailsModal({
   isOpen,
@@ -294,19 +295,19 @@ export default function DeploymentDetailsModal({
                     <div>
                       <span className="text-slate-400 block">Created At</span>
                       <span className="font-mono text-slate-700">
-                        {deploymentData.createdAt ? new Date(deploymentData.createdAt).toLocaleString() : 'N/A'}
+                        {formatIST(deploymentData.createdAt, 'full')}
                       </span>
                     </div>
                     <div>
                       <span className="text-slate-400 block">Started At</span>
                       <span className="font-mono text-slate-700">
-                        {deploymentData.startedAt ? new Date(deploymentData.startedAt).toLocaleString() : 'Pending Start'}
+                        {deploymentData.startedAt ? formatIST(deploymentData.startedAt, 'full') : 'Pending Start'}
                       </span>
                     </div>
                     <div>
                       <span className="text-slate-400 block">Completed / Cancelled At</span>
                       <span className="font-mono text-slate-700">
-                        {deploymentData.completedAt ? new Date(deploymentData.completedAt).toLocaleString() : 'In Progress'}
+                        {deploymentData.completedAt ? formatIST(deploymentData.completedAt, 'full') : 'In Progress'}
                       </span>
                     </div>
                     <div>
@@ -501,7 +502,7 @@ export default function DeploymentDetailsModal({
                           {dep.completedAt && (
                             <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
                               <span>Completed / Concluded:</span>
-                              <span className="font-mono text-slate-600">{new Date(dep.completedAt).toLocaleString()}</span>
+                              <span className="font-mono text-slate-600">{formatIST(dep.completedAt, 'full')}</span>
                             </div>
                           )}
                         </div>

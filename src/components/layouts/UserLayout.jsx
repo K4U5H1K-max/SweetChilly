@@ -3,10 +3,11 @@ import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import NetworkStatusBanner from '../common/NetworkStatusBanner';
 import InstallPromptBanner from '../common/InstallPromptBanner';
+import { getCurrentISTClock } from '../../utils/timeFormat';
 
 export default function UserLayout({ children }) {
   const { currentUser, logout } = useAuth();
-  const [timeStr, setTimeStr] = useState('');
+  const [timeStr, setTimeStr] = useState(getCurrentISTClock());
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -16,11 +17,7 @@ export default function UserLayout({ children }) {
 
   useEffect(() => {
     const updateTime = () => {
-      const now = new Date();
-      const utcH = String(now.getUTCHours()).padStart(2, '0');
-      const utcM = String(now.getUTCMinutes()).padStart(2, '0');
-      const utcS = String(now.getUTCSeconds()).padStart(2, '0');
-      setTimeStr(`UTC ${utcH}:${utcM}:${utcS}`);
+      setTimeStr(getCurrentISTClock());
     };
     updateTime();
     const timer = setInterval(updateTime, 1000);
@@ -37,7 +34,7 @@ export default function UserLayout({ children }) {
 
       {/* Top Header for User Operations Portal */}
       <header className="fixed top-0 left-0 right-0 w-full z-50 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs font-sans pt-safe">
-        {/* Geodetic Telemetry Top Datum Ticker - Hidden on small mobile to maximize workspace */}
+        {/* Geodetic Telemetry Top Datum Ticker */}
         <div className="hidden sm:flex w-full border-b border-slate-100 bg-slate-50 px-4 sm:px-6 py-1 items-center justify-between text-xs text-slate-500">
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1.5 font-medium text-slate-700">
@@ -51,7 +48,7 @@ export default function UserLayout({ children }) {
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5 font-mono text-slate-600">
-              <span>Clock:</span>
+              <span>IST Clock:</span>
               <span className="font-semibold text-slate-800">{timeStr}</span>
             </div>
           </div>
@@ -78,7 +75,7 @@ export default function UserLayout({ children }) {
                   </span>
                 </div>
                 <span className="text-[11px] sm:text-xs text-slate-500 font-medium leading-tight mt-0.5 sm:mt-1 truncate">
-                  Logistics & Fleet Workspace
+                  Logistics & Fleet Operations
                 </span>
               </div>
             </div>
@@ -91,7 +88,7 @@ export default function UserLayout({ children }) {
                 {currentUser?.fullName || 'Logistics Operator'}
               </span>
               <span className="text-[10px] text-blue-700 font-mono font-semibold leading-tight">
-                OPERATOR
+                OPERATOR • {currentUser?.organization || 'Assam Fleet'}
               </span>
             </div>
 
@@ -110,14 +107,14 @@ export default function UserLayout({ children }) {
       </header>
 
       {/* Main Content Area with Bottom Padding for Mobile Nav */}
-      <main className="w-full pt-[60px] sm:pt-[73px] pb-20 md:pb-6 bg-slate-100 flex-1">
+      <main className="w-full pt-[60px] sm:pt-[73px] pb-24 md:pb-8 bg-slate-100 flex-1 flex flex-col">
         {children}
       </main>
 
       {/* Desktop Footer (Hidden on mobile to avoid double nav collision) */}
       <footer className="hidden md:block w-full bg-white border-t border-slate-200 py-4 px-4 sm:px-6 lg:px-8 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>Project Brahmaputra • Regional Logistics Intelligence Platform</span>
+          <span>Project Brahmaputra • Regional Logistics Intelligence Platform (GovTech Operations)</span>
           <span className="font-mono text-[11px]">Role: Logistics Operator Console (USER)</span>
         </div>
       </footer>

@@ -1,107 +1,118 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
+import {
+  IconRoad,
+  IconMap,
+  IconWarning,
+  IconTruck,
+  IconClock,
+} from './common/AppIcons';
+import InfoPopover from './common/InfoPopover';
 
 export default function CommandCenterKPIs() {
-  const { kpis, incidents, vehicles, activeDeployments, availableVehicles } = useApp();
+  const { kpis, incidents, vehicles, activeDeployments, availableVehicles, alerts } = useApp();
 
   const activeDepsCount = activeDeployments ? activeDeployments.length : (kpis.vehiclesInTransit || 0);
   const availCount = availableVehicles ? availableVehicles.length : vehicles.length;
+  const activeAlertsCount = alerts ? alerts.length : (kpis.activeAlerts || 0);
 
   const cards = [
     {
       id: 'kpi-accessibility',
-      code: 'Regional accessibility',
-      label: 'Regional road readiness',
-      value: kpis.districtAccessibility || '78.4%',
-      subtext: 'Across 16 monitored districts',
-      badge: parseFloat(kpis.districtAccessibility) >= 80 ? 'Nominal' : 'Degraded',
+      value: kpis.districtAccessibility || '78.5%',
+      label: 'Regional Accessibility',
+      subtext: 'Across monitored districts',
+      conceptKey: 'REGIONAL_ACCESSIBILITY',
+      badge: parseFloat(kpis.districtAccessibility) >= 80 ? 'Good' : 'Caution',
       badgeClass: parseFloat(kpis.districtAccessibility) >= 80
         ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
         : 'bg-amber-50 text-amber-700 border-amber-200',
-      icon: 'insights',
+      icon: <IconRoad className="w-5 h-5 text-emerald-600" />,
       accentColor: 'border-l-4 border-l-emerald-500',
     },
     {
       id: 'kpi-districts',
-      code: 'Districts monitored',
-      label: 'GIS boundary coverage',
       value: kpis.districtsMonitored || 16,
-      subtext: '16 regional administrative hubs',
+      label: 'Districts Monitored',
+      subtext: '8 NER State Capitals & Hubs',
+      conceptKey: 'ACCESSIBILITY_SCORE',
       badge: '100% Coverage',
       badgeClass: 'bg-blue-50 text-blue-700 border-blue-200',
-      icon: 'map',
+      icon: <IconMap className="w-5 h-5 text-blue-600" />,
       accentColor: 'border-l-4 border-l-blue-500',
     },
     {
       id: 'kpi-alerts',
-      code: 'Active disruptions',
-      label: 'Corridor hazards & blocks',
-      value: kpis.activeAlerts !== undefined ? kpis.activeAlerts : (alerts ? alerts.length : 0),
-      subtext: `${incidents ? incidents.length : 0} field reports logged`,
-      badge: `${kpis.criticalBottlenecks !== undefined ? kpis.criticalBottlenecks : 0} Critical`,
-      badgeClass: 'bg-rose-50 text-rose-700 border-rose-200',
-      icon: 'warning',
+      value: activeAlertsCount,
+      label: 'Active Disruptions',
+      subtext: `${incidents ? incidents.length : 0} incident logs`,
+      conceptKey: 'DISRUPTION_SEVERITY',
+      badge: activeAlertsCount > 0 ? `${activeAlertsCount} Critical` : 'Nominal',
+      badgeClass: activeAlertsCount > 0
+        ? 'bg-rose-50 text-rose-700 border-rose-200'
+        : 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      icon: <IconWarning className="w-5 h-5 text-rose-600" />,
       accentColor: 'border-l-4 border-l-rose-500',
     },
     {
       id: 'kpi-vehicles',
-      code: 'Fleet in transit',
-      label: 'Active corridor journeys',
       value: activeDepsCount,
-      subtext: `${availCount} available • ${vehicles.length} registered`,
-      badge: `${activeDepsCount} Deployed`,
+      label: 'Active Deployments',
+      subtext: `${availCount} at depot • ${vehicles.length} total`,
+      conceptKey: 'STATE_FLEET',
+      badge: `${activeDepsCount} In Transit`,
       badgeClass: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-      icon: 'local_shipping',
+      icon: <IconTruck className="w-5 h-5 text-indigo-600" />,
       accentColor: 'border-l-4 border-l-indigo-500',
     },
     {
       id: 'kpi-delay',
-      code: 'Average corridor delay',
-      label: 'Highway transit delay',
-      value: kpis.averageCorridorDelay || '42 mins',
-      subtext: 'Monsoon & bottleneck impact',
-      badge: 'Elevated Risk',
+      value: kpis.averageCorridorDelay || '45 mins',
+      label: 'Corridor Delay',
+      subtext: 'Monsoon bottleneck impact',
+      conceptKey: 'ROUTE_CONFIDENCE',
+      badge: 'Caution',
       badgeClass: 'bg-amber-50 text-amber-700 border-amber-200',
-      icon: 'timer',
+      icon: <IconClock className="w-5 h-5 text-amber-600" />,
       accentColor: 'border-l-4 border-l-amber-500',
     },
   ];
 
   return (
-    <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 font-sans">
+    <div className="w-full grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3.5 font-sans">
       {cards.map((card) => (
         <div
           key={card.id}
-          className={`bg-white rounded-xl border border-slate-200/90 p-4 shadow-xs hover:shadow-md transition-all flex flex-col justify-between ${card.accentColor}`}
+          className={`bg-white rounded-2xl border border-slate-200/90 p-3.5 sm:p-4 shadow-card hover:shadow-card-hover transition-all flex flex-col justify-between ${card.accentColor}`}
         >
-          {/* Top Label & Status Badge */}
-          <div className="flex items-center justify-between gap-1 mb-2">
-            <span className="text-xs font-semibold text-slate-600 truncate">
-              {card.code}
-            </span>
-            <span
-              className={`px-2 py-0.5 rounded-md text-[10px] font-semibold border ${card.badgeClass} whitespace-nowrap`}
-            >
-              {card.badge}
-            </span>
+          {/* Top Row: Icon + Info Button */}
+          <div className="flex items-center justify-between gap-1 mb-1.5">
+            <div className="w-8 h-8 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0">
+              {card.icon}
+            </div>
+            <div className="flex items-center gap-1">
+              <span
+                className={`px-1.5 py-0.5 rounded-md text-[9px] sm:text-[10px] font-bold border ${card.badgeClass} whitespace-nowrap`}
+              >
+                {card.badge}
+              </span>
+              <InfoPopover conceptKey={card.conceptKey} iconSize="w-3.5 h-3.5" />
+            </div>
           </div>
 
-          {/* Value Display */}
+          {/* Number First Display */}
           <div className="my-1">
-            <div className="text-2xl font-bold font-heading tracking-tight text-slate-900 leading-none">
+            <div className="text-2xl sm:text-3xl font-extrabold font-mono text-[#0B1220] tracking-tight leading-none">
               {card.value}
             </div>
-            <div className="text-xs text-slate-500 font-medium mt-1.5 truncate">
+            <div className="text-xs font-bold text-slate-700 mt-1 truncate">
               {card.label}
             </div>
           </div>
 
-          {/* Footer Subtext */}
-          <div className="pt-2 mt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
-            <span className="truncate">{card.subtext}</span>
-            <span className="material-symbols-outlined text-sm text-slate-400">
-              {card.icon}
-            </span>
+          {/* Subtext */}
+          <div className="pt-2 mt-1 border-t border-slate-100 text-[11px] text-slate-500 truncate">
+            {card.subtext}
           </div>
         </div>
       ))}

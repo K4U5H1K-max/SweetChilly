@@ -1,54 +1,55 @@
 import React from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { formatIST } from '../../utils/timeFormat';
 
 /**
- * Mobile App Header matching Reference Screen 2
- * Compact, GovTech dark navy header with operator greeting, dynamic date, and status beacon
+ * Mobile App Header
+ * Compact, GovTech dark navy header with operator greeting, dynamic IST date, and status beacon
  */
-export default function MobileAppHeader({ title, subtitle, onOpenProfile, onOpenSettings }) {
+export default function MobileAppHeader({ title, subtitle, onOpenSettings }) {
   const { currentUser } = useAuth();
 
   const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good Morning,';
-    if (hour < 17) return 'Good Afternoon,';
+    // Current hour in IST
+    const istHour = parseInt(
+      new Intl.DateTimeFormat('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        hour: 'numeric',
+        hour12: false,
+      }).format(new Date()),
+      10
+    );
+
+    if (istHour < 12) return 'Good Morning,';
+    if (istHour < 17) return 'Good Afternoon,';
     return 'Good Evening,';
   };
 
-  const getFormattedDate = () => {
-    return new Date().toLocaleDateString('en-US', {
-      weekday: 'short',
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
-  };
-
-  const displayName = title || currentUser?.fullName || 'Command Center';
+  const displayName = title || currentUser?.fullName || 'Operator Console';
 
   return (
     <header className="w-full bg-[#0B1220] text-white px-4 pt-3 pb-4 border-b border-slate-800 shadow-sm font-sans">
       <div className="flex items-center justify-between">
-        <div className="flex flex-col">
+        <div className="flex flex-col min-w-0">
           <span className="text-[11px] font-medium text-slate-400 leading-none">
             {getGreeting()}
           </span>
           <h1 className="text-lg font-bold text-white font-heading tracking-tight mt-1 leading-tight truncate max-w-[240px] sm:max-w-none">
             {displayName}
           </h1>
-          <span className="text-[11px] font-mono text-slate-400 mt-0.5">
-            {subtitle || getFormattedDate()}
+          <span className="text-[11px] font-mono text-slate-400 mt-0.5 truncate">
+            {subtitle || formatIST(new Date(), 'dateOnly')}
           </span>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 flex items-center justify-center font-bold text-xs shadow-xs">
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="w-8 h-8 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 flex items-center justify-center font-bold text-xs shadow-xs">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
           </div>
           {onOpenSettings && (
             <button
               onClick={onOpenSettings}
-              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors touch-target"
+              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors touch-target cursor-pointer"
               title="Settings / Profile"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
