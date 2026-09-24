@@ -11,10 +11,14 @@ import {
   calculateKPIs,
 } from '../data/nerData';
 import api from '../services/api';
+import { AuthContext } from './AuthContext';
 
 const AppContext = createContext(null);
 
 export function AppProvider({ children }) {
+  const auth = useContext(AuthContext);
+  const currentUserId = auth?.currentUser?.id || null;
+
   // State Containers
   const [incidents, setIncidents] = useState(INITIAL_INCIDENTS);
   const [alerts, setAlerts] = useState(INITIAL_ALERTS);
@@ -142,6 +146,14 @@ export function AppProvider({ children }) {
       isMounted = false;
     };
   }, [refreshVehicles, refreshDeployments]);
+
+  // Re-hydrate vehicles & deployments whenever the authenticated session user changes
+  useEffect(() => {
+    if (currentUserId) {
+      refreshVehicles();
+      refreshDeployments();
+    }
+  }, [currentUserId, refreshVehicles, refreshDeployments]);
 
   // Derived Collections & State
   const activeDeployments = useMemo(() => {

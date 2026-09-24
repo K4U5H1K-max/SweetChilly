@@ -55,6 +55,7 @@ export default function AdminDashboard() {
   const anyModalOpen =
     isReportModalOpen ||
     isVehicleModalOpen ||
+    Boolean(editingVehicleId) ||
     isDeployModalOpen ||
     isDetailsModalOpen ||
     isRoutePlannerOpen ||
@@ -77,6 +78,7 @@ export default function AdminDashboard() {
       if (anyModalOpen) {
         setIsReportModalOpen(false);
         setIsVehicleModalOpen(false);
+        setEditingVehicleId(null);
         setIsDeployModalOpen(false);
         setIsDetailsModalOpen(false);
         setIsRoutePlannerOpen(false);
@@ -373,6 +375,7 @@ export default function AdminDashboard() {
                 setSelectedVehicleId(id);
                 handleSelectTab('MAP');
               }}
+              onOpenAddVehicle={() => setIsVehicleModalOpen(true)}
               onEditVehicle={handleEditVehicle}
               onOpenSafetyModal={handleOpenSafetyModal}
               onOpenDeployModal={handleOpenDeployModal}
@@ -417,6 +420,17 @@ export default function AdminDashboard() {
       />
 
       {/* ==================== MODALS ==================== */}
+      <VehicleManager
+        isOpen={isVehicleModalOpen || Boolean(editingVehicleId)}
+        onClose={() => {
+          setIsVehicleModalOpen(false);
+          setEditingVehicleId(null);
+        }}
+        editingVehicleId={editingVehicleId}
+        onCloseEdit={() => setEditingVehicleId(null)}
+        onVehicleCreated={handleVehicleCreated}
+      />
+
       <IncidentReportingModal
         isOpen={isReportModalOpen}
         onClose={() => setIsReportModalOpen(false)}

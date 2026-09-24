@@ -384,17 +384,23 @@ export default function UserDashboard() {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3.5">
                   <button
                     onClick={() => {
-                      setPreselectedDeployVehicle(null);
-                      setDeployModalOpen(true);
+                      if (totalVehiclesCount === 0) {
+                        setRegisterModalOpen(true);
+                      } else {
+                        setPreselectedDeployVehicle(null);
+                        setDeployModalOpen(true);
+                      }
                     }}
-                    disabled={availCount === 0}
+                    disabled={totalVehiclesCount > 0 && availCount === 0}
                     className="p-3.5 rounded-xl bg-blue-50/70 hover:bg-blue-100/80 border border-blue-200/80 text-left transition-all disabled:opacity-40 cursor-pointer touch-target"
                   >
                     <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center mb-2 shadow-xs">
                       <IconDeployments className="w-4 h-4" />
                     </div>
                     <span className="font-bold text-xs text-blue-950 block">Dispatch Journey</span>
-                    <span className="text-[10px] text-blue-700 block mt-0.5">{availCount} ready at depot</span>
+                    <span className="text-[10px] text-blue-700 block mt-0.5">
+                      {totalVehiclesCount === 0 ? 'Register asset first' : `${availCount} ready at depot`}
+                    </span>
                   </button>
 
                   <button
