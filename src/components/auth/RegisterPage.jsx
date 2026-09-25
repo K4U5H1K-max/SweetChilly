@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import AuthBackgroundLandscape from './AuthBackgroundLandscape';
-import { IconMail, IconLock, IconUser, IconArrowRight, IconShieldOutline } from '../common/AppIcons';
+import { IconMail, IconLock, IconUser, IconArrowRight, IconShieldOutline, IconEye, IconEyeOff } from '../common/AppIcons';
 
 export default function RegisterPage() {
   const { register, isAuthenticated, isAdmin, isUser, authLoading } = useAuth();
@@ -188,24 +188,13 @@ export default function RegisterPage() {
 
             {/* Password Field */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label
-                  htmlFor="reg-password"
-                  className="flex items-center gap-1.5 text-xs sm:text-[13px] font-bold text-[#0A1629]"
-                >
-                  <IconLock className="w-4 h-4 text-[#0A1629]" />
-                  <span>Create Password (min. 6 chars)</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="text-xs font-semibold text-[#1D4ED8] hover:text-[#1E40AF] transition-colors focus:outline-hidden cursor-pointer"
-                  tabIndex={0}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                >
-                  {showPassword ? 'Hide' : 'Show'}
-                </button>
-              </div>
+              <label
+                htmlFor="reg-password"
+                className="flex items-center gap-1.5 text-xs sm:text-[13px] font-bold text-[#0A1629] mb-1.5"
+              >
+                <IconLock className="w-4 h-4 text-[#0A1629]" />
+                <span>Create Password (min. 6 chars)</span>
+              </label>
               <div className="relative flex items-center">
                 <div className="absolute left-3.5 text-[#7E93AE] pointer-events-none">
                   <IconLock className="w-4 h-4" />
@@ -219,8 +208,18 @@ export default function RegisterPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   disabled={isSubmitting}
-                  className="w-full pl-10 pr-3.5 py-3 bg-[#F9FBFE] border border-[#D0DFEF] rounded-xl sm:rounded-2xl text-xs sm:text-sm text-[#0A1629] font-medium placeholder-[#8FA5C0] focus:outline-hidden focus:border-[#1D4ED8] focus:bg-white focus:ring-3 focus:ring-[#1D4ED8]/15 transition-all disabled:opacity-50"
+                  className="w-full pl-10 pr-11 py-3 bg-[#F9FBFE] border border-[#D0DFEF] rounded-xl sm:rounded-2xl text-xs sm:text-sm text-[#0A1629] font-medium placeholder-[#8FA5C0] focus:outline-hidden focus:border-[#1D4ED8] focus:bg-white focus:ring-3 focus:ring-[#1D4ED8]/15 transition-all disabled:opacity-50"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 p-1.5 text-[#7E93AE] hover:text-[#1D4ED8] hover:bg-slate-100 rounded-lg transition-colors focus:outline-hidden cursor-pointer flex items-center justify-center"
+                  tabIndex={0}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  title={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <IconEyeOff className="w-4.5 h-4.5" /> : <IconEye className="w-4.5 h-4.5" />}
+                </button>
               </div>
             </div>
 
@@ -246,8 +245,18 @@ export default function RegisterPage() {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="••••••••"
                   disabled={isSubmitting}
-                  className="w-full pl-10 pr-3.5 py-3 bg-[#F9FBFE] border border-[#D0DFEF] rounded-xl sm:rounded-2xl text-xs sm:text-sm text-[#0A1629] font-medium placeholder-[#8FA5C0] focus:outline-hidden focus:border-[#1D4ED8] focus:bg-white focus:ring-3 focus:ring-[#1D4ED8]/15 transition-all disabled:opacity-50"
+                  className="w-full pl-10 pr-11 py-3 bg-[#F9FBFE] border border-[#D0DFEF] rounded-xl sm:rounded-2xl text-xs sm:text-sm text-[#0A1629] font-medium placeholder-[#8FA5C0] focus:outline-hidden focus:border-[#1D4ED8] focus:bg-white focus:ring-3 focus:ring-[#1D4ED8]/15 transition-all disabled:opacity-50"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 p-1.5 text-[#7E93AE] hover:text-[#1D4ED8] hover:bg-slate-100 rounded-lg transition-colors focus:outline-hidden cursor-pointer flex items-center justify-center"
+                  tabIndex={0}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  title={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <IconEyeOff className="w-4.5 h-4.5" /> : <IconEye className="w-4.5 h-4.5" />}
+                </button>
               </div>
             </div>
 

@@ -5,7 +5,7 @@
  * Supports PostgreSQL with transparent fallback to in-memory store when DATABASE_URL is unset.
  */
 
-import { INITIAL_NER_VEHICLES, resolveLocationCoordinates } from './schema.js';
+import { INITIAL_NER_VEHICLES, resolveLocationCoordinates, NER_HUB_LOCATIONS } from './schema.js';
 
 export class VehicleRepository {
   /**
@@ -195,6 +195,11 @@ export class VehicleRepository {
   mapRowToVehicle(row) {
     if (!row) return null;
     const hasValidCoords = row.lat !== undefined && row.lat !== null && row.lng !== undefined && row.lng !== null && !isNaN(Number(row.lat)) && !isNaN(Number(row.lng));
+    const capInt = parseInt(row.capacity, 10);
+    const cargoCapacityKg = !isNaN(capInt) && capInt > 0
+      ? (String(row.capacity).toLowerCase().includes('ton') ? capInt * 1000 : capInt)
+      : 5000;
+
     return {
       id: row.id,
       ownerUserId: row.owner_user_id || null,
@@ -203,6 +208,7 @@ export class VehicleRepository {
       name: row.name,
       type: row.type,
       capacity: row.capacity,
+      cargoCapacityKg,
       cargo: row.cargo,
       status: row.status,
       speedKmH: Number(row.speed_km_h || 0),
@@ -316,8 +322,35 @@ export class VehicleRepository {
    * @returns {Promise<object>}
    */
   async createVehicle(v) {
-    const rawOrigin = v.origin || (v.currentLocationName ? v.currentLocationName.replace(/\s+Logistics\s+Hub|\s+Hub/i, '').trim() : null);
-    const resolvedOriginCoords = resolveLocationCoordinates(rawOrigin || v.currentLocationName);
+    const rawReg = (v.regNumber || v.licensePlate || v.registration || v.registrationNumber || (v.id ? `REG-${v.id}` : `AS-01-XX-${Math.floor(1000 + Math.random() * 9000)}`)).trim().toUpperCase();
+
+    // In-memory unique registration check
+    const duplicateInMem = this.memoryStore.find(
+      (existing) => existing.regNumber && existing.regNumber.trim().toUpperCase() === rawReg
+    );
+    if (duplicateInMem) {
+      const err = new Error(`A vehicle with registration number '${rawReg}' already exists.`);
+      err.code = '23505';
+      err.status = 409;
+      throw err;
+    }
+
+    let origin = v.origin || v.depot || v.stagingHub || v.initialDepot || null;
+    if (!origin && v.currentLocationName) {
+      const cleanName = v.currentLocationName.trim();
+      for (const key of Object.keys(NER_HUB_LOCATIONS)) {
+        if (cleanName.toLowerCase().includes(key.toLowerCase())) {
+          origin = key;
+          break;
+        }
+      }
+      if (!origin) {
+        origin = cleanName.replace(/\s+Logistics\s+Hub|\s+Hub/i, '').trim();
+      }
+    }
+    if (!origin) origin = 'Unassigned Depot';
+
+    const resolvedOriginCoords = resolveLocationCoordinates(origin || v.currentLocationName);
 
     const lat = v.currentPos?.lat !== undefined && v.currentPos?.lat !== null
       ? Number(v.currentPos.lat)
@@ -332,14 +365,31 @@ export class VehicleRepository {
 
     const vehicleId = v.id || `VEH-NER-${Date.now().toString(36).toUpperCase()}`;
     const ownerUserId = v.ownerUserId || null;
-    const regNumber = v.regNumber || v.licensePlate || 'AS-01-XX-0000';
-    const name = v.name || 'NER Freight Unit';
-    const type = v.type || 'Standard Cargo Truck';
-    const capacity = v.capacity || '5 Ton';
+    const regNumber = rawReg;
+    const name = v.name || v.vehicleName || v.fleetName || 'NER Freight Unit';
+    const type = v.type || v.vehicleType || v.category || v.class || 'Standard Cargo Truck';
+
+    let capacity = '5000 kg';
+    let cargoCapacityKg = 5000;
+    if (v.cargoCapacityKg !== undefined && v.cargoCapacityKg !== null && !isNaN(Number(v.cargoCapacityKg))) {
+      cargoCapacityKg = Number(v.cargoCapacityKg);
+      capacity = `${cargoCapacityKg} kg`;
+    } else if (v.payloadCapacityKg !== undefined && v.payloadCapacityKg !== null && !isNaN(Number(v.payloadCapacityKg))) {
+      cargoCapacityKg = Number(v.payloadCapacityKg);
+      capacity = `${cargoCapacityKg} kg`;
+    } else if (v.payloadCapacity !== undefined && v.payloadCapacity !== null) {
+      capacity = String(v.payloadCapacity);
+      const capInt = parseInt(capacity, 10);
+      cargoCapacityKg = !isNaN(capInt) && capInt > 0 ? (capacity.toLowerCase().includes('ton') ? capInt * 1000 : capInt) : 5000;
+    } else if (v.capacity !== undefined && v.capacity !== null) {
+      capacity = String(v.capacity);
+      const capInt = parseInt(capacity, 10);
+      cargoCapacityKg = !isNaN(capInt) && capInt > 0 ? (capacity.toLowerCase().includes('ton') ? capInt * 1000 : capInt) : 5000;
+    }
+
     const cargo = v.cargo || 'General Freight';
     const status = v.status || 'AVAILABLE';
     const speedKmH = Number(v.speedKmH) || 45;
-    const origin = rawOrigin || (v.currentLocationName ? v.currentLocationName.replace(/\s+Logistics\s+Hub|\s+Hub/i, '').trim() : null) || 'Unassigned Depot';
     const destination = v.destination || null;
     const assignedCorridor = v.assignedCorridor || (destination ? `${origin} - ${destination}` : null);
     const delayEstMinutes = Number(v.delayEstMinutes) || 0;
@@ -353,49 +403,59 @@ export class VehicleRepository {
     const activeCallId = v.activeCallId || null;
 
     if (this.pool) {
-      const res = await this.pool.query(
-        `INSERT INTO vehicles (
-          id, owner_user_id, reg_number, name, type, capacity, cargo, status, speed_km_h,
-          origin, destination, lat, lng, assigned_corridor, delay_est_minutes,
-          priority, driver_name, driver_phone, is_flagged, flag_reason,
-          safety_status, last_safety_check, active_call_id, created_at, updated_at
-        ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9,
-          $10, $11, $12, $13, $14, $15,
-          $16, $17, $18, $19, $20,
-          $21, $22, $23, NOW(), NOW()
-        ) RETURNING *;`,
-        [
-          vehicleId,
-          ownerUserId,
-          regNumber,
-          name,
-          type,
-          capacity,
-          cargo,
-          status,
-          speedKmH,
-          origin,
-          destination,
-          lat,
-          lng,
-          assignedCorridor,
-          delayEstMinutes,
-          priority,
-          driverName,
-          driverPhone,
-          isFlagged,
-          flagReason,
-          safetyStatus,
-          lastSafetyCheck,
-          activeCallId,
-        ]
-      );
+      try {
+        const res = await this.pool.query(
+          `INSERT INTO vehicles (
+            id, owner_user_id, reg_number, name, type, capacity, cargo, status, speed_km_h,
+            origin, destination, lat, lng, assigned_corridor, delay_est_minutes,
+            priority, driver_name, driver_phone, is_flagged, flag_reason,
+            safety_status, last_safety_check, active_call_id, created_at, updated_at
+          ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9,
+            $10, $11, $12, $13, $14, $15,
+            $16, $17, $18, $19, $20,
+            $21, $22, $23, NOW(), NOW()
+          ) RETURNING *;`,
+          [
+            vehicleId,
+            ownerUserId,
+            regNumber,
+            name,
+            type,
+            capacity,
+            cargo,
+            status,
+            speedKmH,
+            origin,
+            destination,
+            lat,
+            lng,
+            assignedCorridor,
+            delayEstMinutes,
+            priority,
+            driverName,
+            driverPhone,
+            isFlagged,
+            flagReason,
+            safetyStatus,
+            lastSafetyCheck,
+            activeCallId,
+          ]
+        );
 
-      const created = this.mapRowToVehicle(res.rows[0]);
-      // Update memory cache
-      this.memoryStore.push({ ...created });
-      return created;
+        const created = this.mapRowToVehicle(res.rows[0]);
+        // Update memory cache
+        this.memoryStore.push({ ...created });
+        return created;
+      } catch (dbErr) {
+        if (dbErr.code === '23505') {
+          const err = new Error(`A vehicle with registration number '${regNumber}' already exists.`);
+          err.code = '23505';
+          err.status = 409;
+          throw err;
+        }
+        throw dbErr;
+      }
     }
 
     const newVeh = {
@@ -406,6 +466,7 @@ export class VehicleRepository {
       name,
       type,
       capacity,
+      cargoCapacityKg,
       cargo,
       status,
       speedKmH,
@@ -462,9 +523,15 @@ export class VehicleRepository {
         setClauses.push(`type = $${idx++}`);
         values.push(updates.type);
       }
-      if (updates.capacity !== undefined) {
+      if (updates.capacity !== undefined || updates.cargoCapacityKg !== undefined) {
+        let cap = '5000 kg';
+        if (updates.cargoCapacityKg !== undefined && updates.cargoCapacityKg !== null && !isNaN(Number(updates.cargoCapacityKg))) {
+          cap = `${Number(updates.cargoCapacityKg)} kg`;
+        } else if (updates.capacity !== undefined && updates.capacity !== null) {
+          cap = String(updates.capacity);
+        }
         setClauses.push(`capacity = $${idx++}`);
-        values.push(updates.capacity);
+        values.push(cap);
       }
       if (updates.cargo !== undefined) {
         setClauses.push(`cargo = $${idx++}`);
@@ -568,9 +635,22 @@ export class VehicleRepository {
       lng: updates.currentPos?.lng !== undefined ? Number(updates.currentPos.lng) : (updates.longitude !== undefined ? Number(updates.longitude) : existing.currentPos?.lng),
     };
 
+    let newCapacity = existing.capacity;
+    let newCargoCapacityKg = existing.cargoCapacityKg;
+    if (updates.cargoCapacityKg !== undefined && updates.cargoCapacityKg !== null && !isNaN(Number(updates.cargoCapacityKg))) {
+      newCargoCapacityKg = Number(updates.cargoCapacityKg);
+      newCapacity = `${newCargoCapacityKg} kg`;
+    } else if (updates.capacity !== undefined && updates.capacity !== null) {
+      newCapacity = String(updates.capacity);
+      const capInt = parseInt(newCapacity, 10);
+      newCargoCapacityKg = !isNaN(capInt) && capInt > 0 ? (newCapacity.toLowerCase().includes('ton') ? capInt * 1000 : capInt) : 5000;
+    }
+
     const updated = {
       ...existing,
       ...updates,
+      capacity: newCapacity,
+      cargoCapacityKg: newCargoCapacityKg,
       currentPos: newPos,
       updatedAt: new Date().toISOString(),
     };

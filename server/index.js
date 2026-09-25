@@ -780,25 +780,61 @@ app.get('/api/vehicles/:id', optionalAuth, async (req, res) => {
 
 app.post('/api/vehicles', authenticateUser, async (req, res) => {
   try {
-    const v = req.body;
+    const v = req.body || {};
     const isUser = req.user.role === 'USER';
 
-    let driverPhone = v.driverPhone || '+91-98765-43210';
-    if (v.driverPhone) {
-      const phoneVal = validateAndNormalizePhone(v.driverPhone);
-      if (!phoneVal.valid) {
-        return res.status(400).json({ success: false, message: phoneVal.error });
-      }
-      driverPhone = phoneVal.phone;
+    // 1. Validation: Vehicle / Fleet Identifier
+    const vehicleName = (v.name || v.vehicleName || v.fleetName || '').trim();
+    if (!vehicleName) {
+      return res.status(400).json({ success: false, message: 'Please provide a vehicle or fleet identifier.' });
     }
 
-    // Server-Controlled Ownership:
+    // 2. Validation: License Plate / Registration
+    const rawReg = (v.licensePlate || v.regNumber || v.registration || v.registrationNumber || '').trim();
+    if (!rawReg) {
+      return res.status(400).json({ success: false, message: 'Please provide a valid registration / license plate.' });
+    }
+
+    // 3. Validation: Driver Name
+    const driverName = (v.driverName || '').trim();
+    if (!driverName) {
+      return res.status(400).json({ success: false, message: 'Please enter the primary assigned driver name.' });
+    }
+
+    // 4. Validation: Driver Contact Phone
+    if (!v.driverPhone || typeof v.driverPhone !== 'string' || !v.driverPhone.trim()) {
+      return res.status(400).json({ success: false, message: 'Please provide a driver contact phone number.' });
+    }
+    const phoneVal = validateAndNormalizePhone(v.driverPhone);
+    if (!phoneVal.valid) {
+      return res.status(400).json({ success: false, message: phoneVal.error });
+    }
+    const driverPhone = phoneVal.phone;
+
+    // 5. Validation: Payload Capacity
+    if (v.cargoCapacityKg !== undefined && v.cargoCapacityKg !== null) {
+      const capNum = Number(v.cargoCapacityKg);
+      if (isNaN(capNum) || capNum <= 0 || capNum > 100000) {
+        return res.status(400).json({ success: false, message: 'Enter a valid payload capacity.' });
+      }
+    } else if (v.capacity !== undefined && v.capacity !== null) {
+      const capNum = parseFloat(String(v.capacity).trim());
+      if (isNaN(capNum) || capNum <= 0) {
+        return res.status(400).json({ success: false, message: 'Enter a valid payload capacity.' });
+      }
+    }
+
+    // 6. Server-Controlled Ownership:
     // USER accounts are strictly assigned req.user.id as owner (client payloads ignored)
     // ADMIN accounts default to null (admin-managed) unless specified
     const ownerUserId = isUser ? req.user.id : (v.ownerUserId || null);
 
     const newVeh = await vehicleRepository.createVehicle({
       ...v,
+      name: vehicleName,
+      regNumber: rawReg.toUpperCase(),
+      licensePlate: rawReg.toUpperCase(),
+      driverName,
       driverPhone,
       ownerUserId,
     });
@@ -806,10 +842,16 @@ app.post('/api/vehicles', authenticateUser, async (req, res) => {
     const projected = await vehicleRepository.projectActiveDeployment(newVeh);
     vehicles = await vehicleRepository.getAllVehicles();
     console.log(`[Fleet Management] New vehicle ${newVeh.id} registered (Owner: ${newVeh.ownerUserId || 'ADMIN-MANAGED'}, Driver: ${newVeh.driverName}, Phone: ${maskPhone(newVeh.driverPhone)})`);
-    res.status(201).json({ success: true, data: projected });
+    return res.status(201).json({ success: true, data: projected });
   } catch (err) {
+    if (err.code === '23505' || err.status === 409 || (err.message && err.message.toLowerCase().includes('already exists'))) {
+      return res.status(409).json({ success: false, message: 'A vehicle with this registration number already exists.' });
+    }
+    if (err.status === 400 || err.statusCode === 400) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
     console.error('[Vehicle API] Error registering vehicle:', err.message);
-    res.status(500).json({ success: false, message: 'Failed to register vehicle.' });
+    return res.status(500).json({ success: false, message: 'Unable to register vehicle right now. Please try again.' });
   }
 });
 

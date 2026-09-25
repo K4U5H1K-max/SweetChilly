@@ -219,10 +219,10 @@ CREATE TABLE IF NOT EXISTS vehicles (
   status VARCHAR(64) NOT NULL DEFAULT 'AVAILABLE',
   speed_km_h INTEGER NOT NULL DEFAULT 45,
   origin VARCHAR(128) NOT NULL,
-  destination VARCHAR(128) NOT NULL,
+  destination VARCHAR(128),
   lat DOUBLE PRECISION,
   lng DOUBLE PRECISION,
-  assigned_corridor VARCHAR(128) NOT NULL DEFAULT 'NH-27',
+  assigned_corridor VARCHAR(128),
   delay_est_minutes INTEGER NOT NULL DEFAULT 0,
   priority VARCHAR(64) NOT NULL DEFAULT 'MEDIUM',
   driver_name VARCHAR(128) NOT NULL DEFAULT 'Driver',
@@ -237,6 +237,7 @@ CREATE TABLE IF NOT EXISTS vehicles (
 );
 
 CREATE INDEX IF NOT EXISTS idx_vehicles_owner_user_id ON vehicles(owner_user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_vehicles_reg_number_unique ON vehicles(LOWER(reg_number));
 `;
 
 export const CREATE_DEPLOYMENTS_TABLE_SQL = `
@@ -440,6 +441,9 @@ export async function initializeDatabase(pool) {
     await client.query(`
       ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS owner_user_id VARCHAR(64) REFERENCES users(id) ON DELETE RESTRICT;
       CREATE INDEX IF NOT EXISTS idx_vehicles_owner_user_id ON vehicles(owner_user_id);
+      ALTER TABLE vehicles ALTER COLUMN destination DROP NOT NULL;
+      ALTER TABLE vehicles ALTER COLUMN assigned_corridor DROP NOT NULL;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_vehicles_reg_number_unique ON vehicles(LOWER(reg_number));
       ALTER TABLE deployments ADD COLUMN IF NOT EXISTS origin_lat DOUBLE PRECISION;
       ALTER TABLE deployments ADD COLUMN IF NOT EXISTS origin_lng DOUBLE PRECISION;
       ALTER TABLE deployments ADD COLUMN IF NOT EXISTS destination_lat DOUBLE PRECISION;
