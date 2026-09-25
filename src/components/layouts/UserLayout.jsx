@@ -44,7 +44,7 @@ export default function UserLayout({ children }) {
             <span className="hidden md:inline text-slate-300">•</span>
             <span className="hidden md:inline">8 North Eastern States</span>
             <span className="hidden lg:inline text-slate-300">•</span>
-            <span className="hidden lg:inline font-mono">Guwahati Hub: 26°08'N, 91°44'E</span>
+            <span className="hidden lg:inline font-mono">Regional Grid: NER Geodetic Reference</span>
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5 font-mono text-slate-600">

@@ -4,7 +4,7 @@ import { useApp } from '../../context/AppContext';
 import { IconDeployments } from '../common/AppIcons';
 
 export default function UserDeployModal({ isOpen, preselectedVehicle, onClose, onSuccess }) {
-  const { availableVehicles, createDeployment } = useApp();
+  const { vehicles, availableVehicles, createDeployment } = useApp();
 
   const [formData, setFormData] = useState({
     vehicleId: '',
@@ -19,34 +19,55 @@ export default function UserDeployModal({ isOpen, preselectedVehicle, onClose, o
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // Compute strictly available vehicles
+  const effectiveAvailableVehicles = React.useMemo(() => {
+    return (availableVehicles || []).filter(
+      (v) => !v.hasActiveDeployment && !['ACTIVE', 'DELAYED', 'PLANNED'].includes(v.deploymentStatus)
+    );
+  }, [availableVehicles]);
+
+  // Reset error and initialize vehicle selection when modal opens
   useEffect(() => {
+    if (!isOpen) {
+      setError(null);
+      return;
+    }
+
+    setError(null);
+
+    // Resolve preselected vehicle if provided and genuinely available
+    let targetVehicle = null;
     if (preselectedVehicle) {
-      const vOrigin = preselectedVehicle.origin || (preselectedVehicle.currentLocationName ? preselectedVehicle.currentLocationName.replace(/\s+Logistics\s+Hub|\s+Hub/i, '').trim() : 'Agartala');
+      const preselectedId = typeof preselectedVehicle === 'object' ? preselectedVehicle.id : preselectedVehicle;
+      const match = (vehicles || []).find((v) => String(v.id).toLowerCase() === String(preselectedId).toLowerCase());
+      if (match && !match.hasActiveDeployment && !['ACTIVE', 'DELAYED', 'PLANNED'].includes(match.deploymentStatus)) {
+        targetVehicle = match;
+      }
+    }
+
+    if (!targetVehicle && effectiveAvailableVehicles.length > 0) {
+      targetVehicle = effectiveAvailableVehicles.find((veh) => veh.id === formData.vehicleId) || effectiveAvailableVehicles[0];
+    }
+
+    if (targetVehicle) {
+      const vOrigin = targetVehicle.origin || (targetVehicle.currentLocationName ? targetVehicle.currentLocationName.replace(/\s+Logistics\s+Hub|\s+Hub/i, '').trim() : 'Agartala');
       const cleanOrigin = NER_CITIES.find((c) => c.name.toLowerCase() === vOrigin.toLowerCase())?.name || vOrigin;
       const defaultDest = cleanOrigin === 'Silchar' ? 'Shillong' : 'Silchar';
 
       setFormData((prev) => ({
         ...prev,
-        vehicleId: preselectedVehicle.id,
-        origin: cleanOrigin,
-        destination: defaultDest,
-        assignedCorridor: `${cleanOrigin} - ${defaultDest} Corridor`,
-      }));
-    } else if (availableVehicles.length > 0) {
-      const v = availableVehicles.find((veh) => veh.id === formData.vehicleId) || availableVehicles[0];
-      const vOrigin = v.origin || (v.currentLocationName ? v.currentLocationName.replace(/\s+Logistics\s+Hub|\s+Hub/i, '').trim() : 'Agartala');
-      const cleanOrigin = NER_CITIES.find((c) => c.name.toLowerCase() === vOrigin.toLowerCase())?.name || vOrigin;
-      const defaultDest = cleanOrigin === 'Silchar' ? 'Shillong' : 'Silchar';
-
-      setFormData((prev) => ({
-        ...prev,
-        vehicleId: v.id,
+        vehicleId: targetVehicle.id,
         origin: prev.origin || cleanOrigin,
         destination: prev.destination || defaultDest,
         assignedCorridor: prev.assignedCorridor || `${prev.origin || cleanOrigin} - ${prev.destination || defaultDest} Corridor`,
       }));
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        vehicleId: '',
+      }));
     }
-  }, [preselectedVehicle, availableVehicles]);
+  }, [isOpen, preselectedVehicle, effectiveAvailableVehicles, vehicles]);
 
   // Sync corridor name when origin/dest changes
   const handleOriginChange = (orig) => {
@@ -124,7 +145,7 @@ export default function UserDeployModal({ isOpen, preselectedVehicle, onClose, o
     }
   };
 
-  const selectedVehicleObj = availableVehicles.find((v) => v.id === formData.vehicleId);
+  const selectedVehicleObj = effectiveAvailableVehicles.find((v) => v.id === formData.vehicleId);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
@@ -153,18 +174,26 @@ export default function UserDeployModal({ isOpen, preselectedVehicle, onClose, o
           </div>
         )}
 
-        {availableVehicles.length === 0 && !preselectedVehicle ? (
+        {effectiveAvailableVehicles.length === 0 ? (
           <div className="text-center py-6">
-            <p className="text-sm font-semibold text-slate-700">No Available Vehicles</p>
-            <p className="text-xs text-slate-500 mt-1 mb-4">
-              All your registered transport units are currently in transit or no vehicles are registered yet.
+            <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200/80 text-amber-600 flex items-center justify-center mx-auto mb-3.5 shadow-2xs">
+              <IconDeployments className="w-6 h-6" />
+            </div>
+            <h3 className="text-sm font-bold text-slate-900">
+              No vehicles are currently available for deployment.
+            </h3>
+            <p className="text-xs text-slate-500 mt-1.5 mb-5 max-w-xs mx-auto leading-relaxed">
+              Complete an active journey or register another vehicle before starting a new deployment.
             </p>
-            <button
-              onClick={onClose}
-              className="px-4 py-2 bg-slate-100 text-slate-700 font-semibold text-xs rounded-lg hover:bg-slate-200 cursor-pointer"
-            >
-              Close
-            </button>
+            <div className="flex items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -177,9 +206,9 @@ export default function UserDeployModal({ isOpen, preselectedVehicle, onClose, o
                 onChange={(e) => setFormData({ ...formData, vehicleId: e.target.value })}
                 className="w-full px-3.5 py-2 text-sm font-medium bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-hidden cursor-pointer"
               >
-                {availableVehicles.map((v) => (
+                {effectiveAvailableVehicles.map((v) => (
                   <option key={v.id} value={v.id}>
-                    {v.licensePlate} — {v.name} ({v.driverName})
+                    {v.name} — {v.licensePlate || v.regNumber} ({v.driverName || 'Unassigned'})
                   </option>
                 ))}
               </select>
@@ -187,7 +216,7 @@ export default function UserDeployModal({ isOpen, preselectedVehicle, onClose, o
                 <div className="mt-1.5 flex items-center gap-3 text-[11px] text-slate-500">
                   <span>Driver: <strong className="text-slate-700">{selectedVehicleObj.driverName}</strong></span>
                   <span>•</span>
-                  <span>Capacity: <strong className="text-slate-700">{selectedVehicleObj.cargoCapacityKg?.toLocaleString()} kg</strong></span>
+                  <span>Capacity: <strong className="text-slate-700">{selectedVehicleObj.cargoCapacityKg?.toLocaleString() || selectedVehicleObj.capacity || 'N/A'} kg</strong></span>
                 </div>
               )}
             </div>
@@ -271,7 +300,7 @@ export default function UserDeployModal({ isOpen, preselectedVehicle, onClose, o
               </button>
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || !formData.vehicleId}
                 className="px-4 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-xl shadow-xs hover:shadow-md transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
               >
                 {loading && (
@@ -286,3 +315,4 @@ export default function UserDeployModal({ isOpen, preselectedVehicle, onClose, o
     </div>
   );
 }
+

@@ -1031,6 +1031,9 @@ app.post('/api/deployments', authenticateUser, async (req, res) => {
     if (!origin || !destination) {
       return res.status(400).json({ success: false, message: 'origin and destination are required.' });
     }
+    if (String(origin).trim().toLowerCase() === String(destination).trim().toLowerCase()) {
+      return res.status(400).json({ success: false, message: 'Origin and destination hubs cannot be identical.' });
+    }
 
     const vehicle = await vehicleRepository.getVehicleById(vehicleId);
     if (!vehicle) {

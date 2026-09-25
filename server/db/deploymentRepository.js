@@ -263,6 +263,9 @@ export class DeploymentRepository {
     if (!origin || !destination) {
       throw new Error('Origin and destination are required for deployment.');
     }
+    if (origin.toLowerCase() === destination.toLowerCase()) {
+      throw new Error('Origin and destination cannot be identical.');
+    }
 
     const assignedCorridor = String(data.assignedCorridor || `${origin} - ${destination}`).trim();
     const cargo = String(data.cargo || 'General Relief Cargo').trim();

@@ -19,15 +19,22 @@ export default function DeployVehicleModal({
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  // Determine selectable vehicles (available vehicles + preselected vehicle if provided)
+  // Determine selectable vehicles (strictly available vehicles only)
   const selectableVehicles = useMemo(() => {
+    const available = (availableVehicles || []).filter(
+      (v) => !v.hasActiveDeployment && !['ACTIVE', 'DELAYED', 'PLANNED'].includes(v.deploymentStatus)
+    );
     if (preselectedVehicleId) {
-      const match = vehicles.find((v) => v.id === preselectedVehicleId);
-      if (match && !availableVehicles.some((v) => v.id === match.id)) {
-        return [match, ...availableVehicles];
+      const match = (vehicles || []).find(
+        (v) => String(v.id).toLowerCase() === String(preselectedVehicleId).toLowerCase()
+      );
+      if (match && !match.hasActiveDeployment && !['ACTIVE', 'DELAYED', 'PLANNED'].includes(match.deploymentStatus)) {
+        if (!available.some((v) => v.id === match.id)) {
+          return [match, ...available];
+        }
       }
     }
-    return availableVehicles.length > 0 ? availableVehicles : vehicles;
+    return available;
   }, [availableVehicles, vehicles, preselectedVehicleId]);
 
   // Selected vehicle object
@@ -192,17 +199,41 @@ export default function DeployVehicleModal({
         )}
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
-          {/* Section 1: Vehicle Selection & Manifest Summary */}
-          <div className="bg-slate-50 rounded-xl p-4 border border-slate-200/90 space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">
-                Select Fleet Asset
-              </label>
-              <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                {selectableVehicles.length} Asset{selectableVehicles.length !== 1 ? 's' : ''} Ready
-              </span>
+        {selectableVehicles.length === 0 ? (
+          <div className="p-8 text-center space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200/80 text-amber-600 flex items-center justify-center mx-auto mb-2 shadow-2xs">
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
             </div>
+            <h3 className="text-sm font-bold text-slate-900">
+              No vehicles are currently available for deployment.
+            </h3>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+              Complete an active journey or register another vehicle before starting a new deployment.
+            </p>
+            <div className="pt-2 flex justify-center">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="p-6 space-y-5">
+            {/* Section 1: Vehicle Selection & Manifest Summary */}
+            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200/90 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">
+                  Select Fleet Asset
+                </label>
+                <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                  {selectableVehicles.length} Asset{selectableVehicles.length !== 1 ? 's' : ''} Ready
+                </span>
+              </div>
 
             <select
               value={selectedVehicleId}
@@ -363,7 +394,8 @@ export default function DeployVehicleModal({
             </button>
           </div>
         </form>
-      </div>
+      )}
     </div>
-  );
+  </div>
+);
 }

@@ -675,38 +675,47 @@ export default function MapplsGISMap({
             )}
 
             {/* VEHICLE CARD */}
-            {selectedItem.type === 'VEHICLE' && (
-              <div className="space-y-2 text-xs">
-                <div className="flex justify-between items-center">
-                  <span className="font-bold text-slate-900 text-sm">{selectedItem.data.licensePlate || selectedItem.data.id}</span>
-                  <span className="text-emerald-700 font-bold">{selectedItem.data.speedKmH || 0} km/h</span>
+            {selectedItem.type === 'VEHICLE' && (() => {
+              const v = selectedItem.data;
+              const isDeployed = v.hasActiveDeployment || ['ACTIVE', 'DELAYED', 'PLANNED'].includes(v.deploymentStatus);
+              return (
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-slate-900 text-sm">{v.licensePlate || v.id}</span>
+                    <span className="text-emerald-700 font-bold">{v.speedKmH || 0} km/h</span>
+                  </div>
+                  <div className="text-slate-600">
+                    Route: <strong>{v.origin || 'Depot'} → {v.destination || 'Hub'}</strong>
+                  </div>
+                  <div className="text-slate-500 text-[11px]">
+                    Driver: {v.driverName || 'Unassigned'} • {v.driverPhone || 'No contact'}
+                  </div>
+                  <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+                    {onOpenSafetyModal && (
+                      <button
+                        onClick={() => onOpenSafetyModal(v.id)}
+                        className="flex-1 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors text-center text-xs touch-target sm:min-h-0"
+                      >
+                        Safety Check
+                      </button>
+                    )}
+                    {!isDeployed && onOpenDeployModal && (
+                      <button
+                        onClick={() => onOpenDeployModal(v)}
+                        className="flex-1 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg transition-colors text-center text-xs touch-target sm:min-h-0"
+                      >
+                        Deploy
+                      </button>
+                    )}
+                    {isDeployed && (
+                      <span className="flex-1 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 font-bold rounded-lg text-center text-[11px]">
+                        In Transit ({v.deploymentStatus || 'ACTIVE'})
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div className="text-slate-600">
-                  Route: <strong>{selectedItem.data.origin || 'Depot'} → {selectedItem.data.destination || 'Hub'}</strong>
-                </div>
-                <div className="text-slate-500 text-[11px]">
-                  Driver: {selectedItem.data.driverName} • {selectedItem.data.driverPhone}
-                </div>
-                <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
-                  {onOpenSafetyModal && (
-                    <button
-                      onClick={() => onOpenSafetyModal(selectedItem.data.id)}
-                      className="flex-1 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors text-center text-xs touch-target sm:min-h-0"
-                    >
-                      Safety Check
-                    </button>
-                  )}
-                  {onOpenDeployModal && (
-                    <button
-                      onClick={() => onOpenDeployModal(selectedItem.data.id)}
-                      className="flex-1 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg transition-colors text-center text-xs touch-target sm:min-h-0"
-                    >
-                      Deploy
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* WEATHER CARD */}
             {selectedItem.type === 'WEATHER' && (
