@@ -99,18 +99,6 @@ export default function UserLayout({ children }) {
               <IconWarning className="w-4 h-4 text-rose-600" />
             </button>
 
-            {/* Mobile Menu Action -> navigates to MORE */}
-            <button
-              onClick={() => window.dispatchEvent(new CustomEvent('user-navigate-tab', { detail: 'MORE' }))}
-              className="sm:hidden w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 flex items-center justify-center transition-all cursor-pointer touch-target"
-              aria-label="Account Menu"
-              title="Menu / Settings"
-            >
-              <svg className="w-4 h-4 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-
             {/* Desktop User Info & Logout Button (Hidden on mobile) */}
             <div className="hidden sm:flex flex-col text-right">
               <span className="text-xs font-bold text-slate-800 leading-tight truncate max-w-[120px] lg:max-w-[180px]">

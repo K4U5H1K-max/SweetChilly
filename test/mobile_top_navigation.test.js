@@ -50,13 +50,7 @@ async function runTests() {
     'Navbar Report Hazard button must have accessible aria-label="Report Hazard"'
   );
 
-  // Check 5: Mobile menu button exists
-  assert.ok(
-    navbarCode.includes('aria-label="Navigation Menu"'),
-    'Navbar must provide mobile navigation menu control'
-  );
-
-  // Check 6: Command badge is hidden on mobile
+  // Check 5: Command badge is hidden on mobile
   assert.ok(
     navbarCode.includes('hidden sm:inline-block') && navbarCode.includes('Command'),
     'Command badge must be hidden on mobile to avoid squeezing brand'

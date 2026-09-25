@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { getCurrentISTClock } from '../utils/timeFormat';
 import { IconRoute, IconPlus, IconWarning } from './common/AppIcons';
 
-export default function Navbar({ onOpenReportModal, onOpenAddVehicle, onOpenRoutePlanner, onOpenMenu }) {
+export default function Navbar({ onOpenReportModal, onOpenAddVehicle, onOpenRoutePlanner }) {
   const [activeTab, setActiveTab] = useState('command-center');
   const [timeStr, setTimeStr] = useState(getCurrentISTClock());
   const { backendHealth } = useApp();
@@ -111,20 +111,6 @@ export default function Navbar({ onOpenReportModal, onOpenAddVehicle, onOpenRout
             <IconWarning className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-rose-600 sm:text-white" />
             <span className="hidden sm:inline">Report</span>
           </button>
-
-          {/* Mobile Menu Action -> Opens More/Navigation */}
-          {onOpenMenu && (
-            <button
-              onClick={onOpenMenu}
-              className="sm:hidden w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 flex items-center justify-center transition-all cursor-pointer touch-target"
-              aria-label="Navigation Menu"
-              title="Menu"
-            >
-              <svg className="w-4 h-4 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-          )}
 
           {/* Admin User Pill & Logout Button - Desktop Only */}
           {isAuthenticated && (
