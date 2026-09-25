@@ -169,17 +169,17 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   disabled={isSubmitting}
-                  className="w-full pl-10 pr-11 py-3 bg-[#F9FBFE] border border-[#D0DFEF] rounded-xl sm:rounded-2xl text-xs sm:text-sm text-[#0A1629] font-medium placeholder-[#8FA5C0] focus:outline-hidden focus:border-[#1D4ED8] focus:bg-white focus:ring-3 focus:ring-[#1D4ED8]/15 transition-all disabled:opacity-50"
+                  className="w-full pl-10 pr-12 py-3 bg-[#F9FBFE] border border-[#D0DFEF] rounded-xl sm:rounded-2xl text-xs sm:text-sm text-[#0A1629] font-medium placeholder-[#8FA5C0] focus:outline-hidden focus:border-[#1D4ED8] focus:bg-white focus:ring-3 focus:ring-[#1D4ED8]/15 transition-all disabled:opacity-50"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 p-1.5 text-[#7E93AE] hover:text-[#1D4ED8] hover:bg-slate-100 rounded-lg transition-colors focus:outline-hidden cursor-pointer flex items-center justify-center"
+                  className="absolute right-1 sm:right-1.5 w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center text-[#7E93AE] hover:text-[#1D4ED8] hover:bg-slate-100/80 active:bg-slate-200/80 rounded-xl transition-all focus:outline-hidden focus:ring-2 focus:ring-[#1D4ED8]/30 cursor-pointer touch-target"
                   tabIndex={0}
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                   title={showPassword ? 'Hide password' : 'Show password'}
                 >
-                  {showPassword ? <IconEyeOff className="w-4.5 h-4.5" /> : <IconEye className="w-4.5 h-4.5" />}
+                  {showPassword ? <IconEye className="w-5 h-5 text-[#1D4ED8]" /> : <IconEyeOff className="w-5 h-5 text-[#7E93AE]" />}
                 </button>
               </div>
             </div>
