@@ -56,17 +56,17 @@ export default function UserLayout({ children }) {
         </div>
 
         {/* Main Navigation Bar */}
-        <div className="h-14 sm:h-16 px-3 sm:px-6 flex items-center justify-between gap-2">
+        <div className="h-14 sm:h-16 px-2.5 sm:px-6 flex items-center justify-between gap-1.5 sm:gap-4">
           {/* Brand Logo & Wordmark */}
-          <div className="flex items-center gap-2.5 sm:gap-6 min-w-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <div
-              className="flex items-center gap-2.5 sm:gap-3 cursor-pointer group min-w-0"
+              className="flex items-center gap-2 sm:gap-2.5 cursor-pointer group min-w-0"
               onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
             >
               <img
                 src="/pwa-192x192.png"
                 alt="Project Brahmaputra"
-                className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-contain shrink-0 shadow-xs ring-1 ring-slate-200/50"
+                className="w-7 h-7 sm:w-9 sm:h-9 rounded-full object-contain shrink-0 shadow-xs ring-1 ring-slate-200/50"
               />
               <div className="flex flex-col min-w-0">
                 <div className="flex items-center gap-1.5 sm:gap-2">
@@ -80,26 +80,24 @@ export default function UserLayout({ children }) {
                 <span className="hidden sm:inline-block text-xs text-slate-500 font-medium leading-tight mt-0.5 truncate">
                   Logistics & Fleet Operations
                 </span>
-                <span className="sm:hidden text-[10px] text-slate-500 font-mono leading-none truncate">
-                  NER Logistics Operator
-                </span>
               </div>
             </div>
           </div>
 
           {/* Right User Bar & Actions */}
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            {/* Report Hazard Action - Compact Icon on Mobile */}
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0 ml-auto">
+            {/* Report Hazard Action - Compact Icon on Mobile, Full on Desktop */}
             <button
               onClick={() => window.dispatchEvent(new CustomEvent('open-report-incident-modal'))}
-              className="sm:hidden w-9 h-9 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/80 flex items-center justify-center transition-all cursor-pointer shadow-2xs touch-target"
+              className="w-9 h-9 sm:w-auto sm:px-3 sm:py-1.5 rounded-xl bg-rose-50 sm:bg-rose-600 hover:bg-rose-100 sm:hover:bg-rose-700 text-rose-600 sm:text-white border border-rose-200/80 sm:border-transparent text-xs font-semibold transition-all flex items-center justify-center gap-1.5 shadow-2xs touch-target sm:min-h-0 sm:min-w-0 cursor-pointer"
               aria-label="Report Hazard"
               title="Report Hazard / Incident"
             >
-              <IconWarning className="w-4 h-4 text-rose-600" />
+              <IconWarning className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-rose-600 sm:text-white" />
+              <span className="hidden sm:inline">Report</span>
             </button>
 
-            {/* Desktop User Info & Logout Button (Hidden on mobile) */}
+            {/* Desktop User Info */}
             <div className="hidden sm:flex flex-col text-right">
               <span className="text-xs font-bold text-slate-800 leading-tight truncate max-w-[120px] lg:max-w-[180px]">
                 {currentUser?.fullName || 'Logistics Operator'}
@@ -109,15 +107,17 @@ export default function UserLayout({ children }) {
               </span>
             </div>
 
+            {/* Logout Action */}
             <button
               onClick={handleLogout}
-              className="hidden sm:flex px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 text-xs font-semibold border border-slate-200 hover:border-rose-200 transition-all items-center gap-1.5 cursor-pointer shadow-xs touch-target sm:min-h-0 sm:min-w-0"
+              className="w-9 h-9 sm:w-auto px-0 sm:px-2.5 sm:py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 text-xs font-semibold border border-slate-200 hover:border-rose-200 transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs sm:shadow-xs touch-target sm:min-h-0 sm:min-w-0"
+              aria-label="Logout"
               title="Sign out of operator session"
             >
-              <svg className="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
               </svg>
-              <span>Logout</span>
+              <span className="hidden sm:inline">Logout</span>
             </button>
           </div>
         </div>

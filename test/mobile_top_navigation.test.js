@@ -38,10 +38,10 @@ async function runTests() {
     'Navbar Register Vehicle button must be hidden on mobile header'
   );
 
-  // Check 3: Logout button is hidden on mobile header
+  // Check 3: Logout button is present with accessible aria-label and compact mobile touch target
   assert.ok(
-    navbarCode.includes('hidden sm:flex') && navbarCode.includes('Logout'),
-    'Navbar Logout button must be hidden on mobile header'
+    navbarCode.includes('aria-label="Logout"') && navbarCode.includes('w-9 h-9 sm:w-auto'),
+    'Navbar Logout button must be present on mobile header with compact touch target'
   );
 
   // Check 4: Report Hazard is accessible with aria-label
@@ -55,16 +55,16 @@ async function runTests() {
     navbarCode.includes('hidden sm:inline-block') && navbarCode.includes('Command'),
     'Command badge must be hidden on mobile to avoid squeezing brand'
   );
-  console.log('  ✓ Navbar.jsx verified: Mobile header is clean, compact, and desktop actions are preserved.\n');
+  console.log('  ✓ Navbar.jsx verified: Mobile header is clean, compact, displays [Brahmaputra] [⚠] [Logout], and desktop actions are preserved.\n');
 
   console.log('2. Auditing UserLayout.jsx mobile & desktop layout structure...');
   const userLayoutPath = path.resolve('src/components/layouts/UserLayout.jsx');
   const userLayoutCode = fs.readFileSync(userLayoutPath, 'utf8');
 
-  // Check 1: Logout button is hidden on mobile header
+  // Check 1: Logout button is present on mobile header
   assert.ok(
-    userLayoutCode.includes('hidden sm:flex') && userLayoutCode.includes('Logout'),
-    'UserLayout Logout button must be hidden on mobile header'
+    userLayoutCode.includes('aria-label="Logout"') && userLayoutCode.includes('w-9 h-9 sm:w-auto'),
+    'UserLayout Logout button must be present on mobile header with compact touch target'
   );
 
   // Check 2: Report Hazard is accessible on mobile header
@@ -78,7 +78,7 @@ async function runTests() {
     userLayoutCode.includes('hidden sm:inline-block') && userLayoutCode.includes('Operator'),
     'Operator badge must be hidden on mobile header to prevent title truncation'
   );
-  console.log('  ✓ UserLayout.jsx verified: Mobile header is clean and compact.\n');
+  console.log('  ✓ UserLayout.jsx verified: Mobile header is clean, compact, and displays [Brahmaputra] [⚠] [Logout].\n');
 
   console.log('3. Auditing UserDashboard.jsx mobile hero conditional rendering...');
   const userDashPath = path.resolve('src/components/user/UserDashboard.jsx');
