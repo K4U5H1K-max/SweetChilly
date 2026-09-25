@@ -182,6 +182,7 @@ export default function AdminDashboard() {
         onOpenReportModal={() => setIsReportModalOpen(true)}
         onOpenAddVehicle={() => setIsVehicleModalOpen(true)}
         onOpenRoutePlanner={() => setIsRoutePlannerOpen(true)}
+        onOpenMenu={() => handleSelectTab('MORE')}
       />
 
       {/* Global Floating Toast Notification */}

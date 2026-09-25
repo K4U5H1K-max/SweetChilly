@@ -104,6 +104,24 @@ export default function UserDashboard() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [anyModalOpen]);
 
+  // Global mobile header action integration
+  useEffect(() => {
+    const handleOpenReport = () => {
+      setReportContext(null);
+      setReportModalOpen(true);
+    };
+    const handleNavigateTab = (e) => {
+      if (e.detail) handleSelectTab(e.detail);
+    };
+
+    window.addEventListener('open-report-incident-modal', handleOpenReport);
+    window.addEventListener('user-navigate-tab', handleNavigateTab);
+    return () => {
+      window.removeEventListener('open-report-incident-modal', handleOpenReport);
+      window.removeEventListener('user-navigate-tab', handleNavigateTab);
+    };
+  }, [handleSelectTab]);
+
   const handleDeploySpecificVehicle = (v) => {
     setPreselectedDeployVehicle(v);
     setDeployModalOpen(true);
@@ -160,13 +178,15 @@ export default function UserDashboard() {
 
   return (
     <div className={`w-full flex flex-col font-sans bg-[#F5F7FA] flex-1 min-h-0 ${activeTab === 'MAP' ? 'h-[100dvh] max-h-[100dvh] overflow-hidden md:overflow-visible md:h-auto pb-14 md:pb-8' : 'pb-20 md:pb-8'}`}>
-      {/* ==================== MOBILE APP HEADER ==================== */}
-      <div className="md:hidden">
-        <MobileAppHeader
-          title={currentUser?.fullName || 'Operator Console'}
-          subtitle={`NER Organization: ${currentUser?.organization || 'Assam Regional Fleet'}`}
-        />
-      </div>
+      {/* ==================== MOBILE APP HERO (HOME ONLY) ==================== */}
+      {activeTab === 'HOME' && (
+        <div className="md:hidden">
+          <MobileAppHeader
+            title={currentUser?.fullName || 'Operator Console'}
+            subtitle={`NER Organization: ${currentUser?.organization || 'Assam Regional Fleet'}`}
+          />
+        </div>
+      )}
 
       {/* ==================== DESKTOP WORKSPACE TOP BAR ==================== */}
       <section className="hidden md:block w-full bg-white border-b border-slate-200 py-5 px-6 lg:px-8 shadow-xs">
