@@ -133,8 +133,8 @@ export default function UserDashboard() {
       subtext: `${activeDepsCount} on corridor route`,
       conceptKey: 'UNKNOWN_DEPLOYMENT',
       icon: <IconDeployments className="w-5 h-5 text-blue-600" />,
-      badge: 'In Transit',
-      badgeClass: 'bg-blue-50 text-blue-700 border-blue-200',
+      badge: activeDepsCount > 0 ? 'In Transit' : 'Idle',
+      badgeClass: activeDepsCount > 0 ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-slate-100 text-slate-600 border-slate-200',
     },
     {
       id: 'kpi-available',
@@ -143,8 +143,8 @@ export default function UserDashboard() {
       subtext: 'Ready for dispatch',
       conceptKey: 'STATE_FLEET',
       icon: <IconTruck className="w-5 h-5 text-emerald-600" />,
-      badge: 'Ready',
-      badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      badge: availCount > 0 ? 'Ready' : 'Depot 0',
+      badgeClass: availCount > 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200',
     },
     {
       id: 'kpi-disruptions',
@@ -260,11 +260,11 @@ export default function UserDashboard() {
       </section>
 
       {/* ==================== MAIN SCREEN WORKSPACE ==================== */}
-      <main className="w-full flex-1 py-4 sm:py-6 px-3 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto flex flex-col gap-4 sm:gap-6">
+      <main className="w-full flex-1 py-3.5 sm:py-6 px-3 sm:px-6 lg:px-8 pb-28 md:pb-8">
+        <div className="max-w-7xl mx-auto flex flex-col gap-3.5 sm:gap-6">
           {/* Action Success Alert Notification */}
           {actionSuccessMsg && (
-            <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between shadow-xs animate-fade-in">
+            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between shadow-xs animate-fade-in">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                 <span className="font-medium">{actionSuccessMsg}</span>
@@ -282,18 +282,23 @@ export default function UserDashboard() {
           {/* SCREEN 1: HOME (Compact Operational Overview) */}
           {/* ========================================================= */}
           {activeTab === 'HOME' && (
-            <div className="space-y-4 sm:space-y-5 animate-fade-in">
+            <div className="space-y-3.5 sm:space-y-5 animate-fade-in">
               {/* Critical Alert Banner */}
               {activeAlertsCount > 0 && (
-                <div className="bg-[#DC2626] text-white rounded-2xl p-4 shadow-md flex items-center justify-between gap-3 animate-fade-in">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
-                      <IconWarning className="w-5 h-5 text-white animate-pulse" />
+                <div className="bg-[#DC2626] text-white rounded-2xl p-3 sm:p-4 shadow-md flex items-center justify-between gap-2.5 sm:gap-3 animate-fade-in">
+                  <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                    <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                      <IconWarning className="w-4 h-4 sm:w-5 sm:h-5 text-white animate-pulse" />
                     </div>
-                    <div className="truncate">
-                      <h4 className="text-xs sm:text-sm font-bold leading-tight">
-                        {activeAlertsCount} Active Corridor Disruption Advisories
-                      </h4>
+                    <div className="truncate min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold uppercase bg-white/25 text-white font-mono">
+                          {alerts[0]?.level || 'CRITICAL'}
+                        </span>
+                        <h4 className="text-xs sm:text-sm font-bold leading-tight truncate">
+                          {activeAlertsCount} Corridor Disruption Advisory{activeAlertsCount > 1 ? 's' : ''}
+                        </h4>
+                      </div>
                       <p className="text-[11px] text-white/90 truncate mt-0.5">
                         {alerts[0]?.headline || 'Roadblock detected on arterial corridor. Immediate operator attention required.'}
                       </p>
@@ -301,7 +306,7 @@ export default function UserDashboard() {
                   </div>
                   <button
                     onClick={() => handleSelectTab('MAP')}
-                    className="px-3 py-1.5 bg-white text-[#DC2626] font-bold text-xs rounded-xl shrink-0 shadow-xs cursor-pointer hover:bg-slate-100 transition-colors"
+                    className="px-2.5 sm:px-3 py-1.5 bg-white text-[#DC2626] font-bold text-xs rounded-xl shrink-0 shadow-xs cursor-pointer hover:bg-slate-100 transition-colors touch-target sm:min-h-0"
                   >
                     View Map
                   </button>
@@ -313,30 +318,30 @@ export default function UserDashboard() {
                 {kpiCards.map((card) => (
                   <div
                     key={card.id}
-                    className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-card hover:shadow-card-hover transition-all flex flex-col justify-between"
+                    className="bg-white border border-slate-200/90 rounded-2xl p-3 sm:p-4 shadow-card hover:shadow-card-hover transition-all flex flex-col justify-between"
                   >
                     <div className="flex items-center justify-between gap-1 mb-1">
-                      <div className="w-8 h-8 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0">
+                      <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0">
                         {card.icon}
                       </div>
                       <div className="flex items-center gap-1">
-                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${card.badgeClass}`}>
+                        <span className={`px-1.5 py-0.2 sm:px-2 sm:py-0.5 rounded-md text-[9px] sm:text-[10px] font-bold border ${card.badgeClass}`}>
                           {card.badge}
                         </span>
                         <InfoPopover conceptKey={card.conceptKey} iconSize="w-3.5 h-3.5" />
                       </div>
                     </div>
 
-                    <div className="my-1.5">
-                      <div className="text-2xl sm:text-3xl font-extrabold font-mono text-[#0B1220] tracking-tight leading-none">
+                    <div className="my-1 sm:my-1.5">
+                      <div className="text-xl sm:text-3xl font-extrabold font-mono text-[#0B1220] tracking-tight leading-none">
                         {card.value}
                       </div>
-                      <div className="text-xs font-bold text-slate-700 mt-1 truncate">
+                      <div className="text-[11px] sm:text-xs font-bold text-slate-700 mt-1 truncate">
                         {card.label}
                       </div>
                     </div>
 
-                    <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-400 truncate">
+                    <div className="pt-1.5 sm:pt-2 border-t border-slate-100 text-[10px] sm:text-[11px] text-slate-400 truncate">
                       {card.subtext}
                     </div>
                   </div>
@@ -344,24 +349,24 @@ export default function UserDashboard() {
               </div>
 
               {/* Operational Safety & Regional Status Bar */}
-              <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-card flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-700 shrink-0">
-                    <IconShield className="w-5 h-5 text-slate-800" />
+              <div className="bg-white border border-slate-200/90 rounded-2xl p-3 sm:p-4 shadow-card flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-3">
+                <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-700 shrink-0">
+                    <IconShield className="w-4 h-4 sm:w-5 sm:h-5 text-slate-800" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-bold text-slate-700">Corridor Safety Evaluation</span>
+                      <span className="text-xs font-bold text-slate-700 truncate">Corridor Safety Evaluation</span>
                       <InfoPopover conceptKey="SAFETY_STATUS" iconSize="w-3 h-3" />
                     </div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className={`w-2 h-2 rounded-full ${safetyState.dot} inline-block animate-pulse`}></span>
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                      <span className={`w-2 h-2 rounded-full ${safetyState.dot} inline-block animate-pulse shrink-0`}></span>
                       <span className={`text-xs font-extrabold font-mono ${safetyState.color}`}>
                         {safetyState.label}
                       </span>
-                      <span className="text-slate-300">•</span>
-                      <span className="text-[11px] text-slate-400">
-                        Updated {formatIST(new Date(), 'timeOnly')}
+                      <span className="text-slate-300 hidden sm:inline">•</span>
+                      <span className="text-[10px] sm:text-[11px] text-slate-400 font-mono">
+                        {formatIST(new Date(), 'timeOnly')}
                       </span>
                     </div>
                   </div>
@@ -369,7 +374,7 @@ export default function UserDashboard() {
 
                 <button
                   onClick={() => handleSelectTab('MAP')}
-                  className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition-colors flex items-center gap-1.5 self-stretch sm:self-auto justify-center"
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition-colors flex items-center gap-1.5 self-stretch sm:self-auto justify-center touch-target sm:min-h-0"
                 >
                   <IconMap className="w-4 h-4 text-blue-600" />
                   <span>View Live GIS Map</span>
@@ -377,11 +382,11 @@ export default function UserDashboard() {
               </div>
 
               {/* Quick Action Grid */}
-              <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-card">
-                <h3 className="font-heading font-bold text-xs text-slate-400 uppercase tracking-wider mb-3 font-mono">
+              <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 sm:p-5 shadow-card">
+                <h3 className="font-heading font-bold text-[10px] sm:text-xs text-slate-400 uppercase tracking-wider mb-2.5 sm:mb-3 font-mono">
                   Operator Quick Actions
                 </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3.5">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
                   <button
                     onClick={() => {
                       if (totalVehiclesCount === 0) {
@@ -392,37 +397,41 @@ export default function UserDashboard() {
                       }
                     }}
                     disabled={totalVehiclesCount > 0 && availCount === 0}
-                    className="p-3.5 rounded-xl bg-blue-50/70 hover:bg-blue-100/80 border border-blue-200/80 text-left transition-all disabled:opacity-40 cursor-pointer touch-target"
+                    className={`p-3 rounded-xl border text-left transition-all touch-target ${
+                      totalVehiclesCount > 0 && availCount === 0
+                        ? 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed'
+                        : 'bg-blue-50/70 hover:bg-blue-100/80 border-blue-200/80 cursor-pointer'
+                    }`}
                   >
-                    <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center mb-2 shadow-xs">
-                      <IconDeployments className="w-4 h-4" />
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center mb-2 shadow-xs">
+                      <IconDeployments className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     </div>
-                    <span className="font-bold text-xs text-blue-950 block">Dispatch Journey</span>
-                    <span className="text-[10px] text-blue-700 block mt-0.5">
+                    <span className="font-bold text-xs text-blue-950 block truncate">Dispatch Journey</span>
+                    <span className="text-[10px] text-blue-700 block mt-0.5 truncate">
                       {totalVehiclesCount === 0 ? 'Register asset first' : `${availCount} ready at depot`}
                     </span>
                   </button>
 
                   <button
                     onClick={() => setRegisterModalOpen(true)}
-                    className="p-3.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition-all cursor-pointer touch-target"
+                    className="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition-all cursor-pointer touch-target"
                   >
-                    <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center mb-2 shadow-xs">
-                      <IconPlus className="w-4 h-4" />
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center mb-2 shadow-xs">
+                      <IconPlus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     </div>
-                    <span className="font-bold text-xs text-slate-900 block">Register Vehicle</span>
-                    <span className="text-[10px] text-slate-500 block mt-0.5">Enrol fleet asset</span>
+                    <span className="font-bold text-xs text-slate-900 block truncate">Register Vehicle</span>
+                    <span className="text-[10px] text-slate-500 block mt-0.5 truncate">Enrol fleet asset</span>
                   </button>
 
                   <button
                     onClick={() => handleSelectTab('MAP')}
-                    className="p-3.5 rounded-xl bg-indigo-50/70 hover:bg-indigo-100/80 border border-indigo-200/80 text-left transition-all cursor-pointer touch-target"
+                    className="p-3 rounded-xl bg-indigo-50/70 hover:bg-indigo-100/80 border border-indigo-200/80 text-left transition-all cursor-pointer touch-target"
                   >
-                    <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center mb-2 shadow-xs">
-                      <IconMap className="w-4 h-4" />
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center mb-2 shadow-xs">
+                      <IconMap className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     </div>
-                    <span className="font-bold text-xs text-indigo-950 block">Live GIS Map</span>
-                    <span className="text-[10px] text-indigo-700 block mt-0.5">Corridors & Weather</span>
+                    <span className="font-bold text-xs text-indigo-950 block truncate">Live GIS Map</span>
+                    <span className="text-[10px] text-indigo-700 block mt-0.5 truncate">Corridors & Weather</span>
                   </button>
 
                   <button
@@ -430,25 +439,25 @@ export default function UserDashboard() {
                       setReportContext(null);
                       setReportModalOpen(true);
                     }}
-                    className="p-3.5 rounded-xl bg-rose-50/70 hover:bg-rose-100/80 border border-rose-200/80 text-left transition-all cursor-pointer touch-target"
+                    className="p-3 rounded-xl bg-rose-50/70 hover:bg-rose-100/80 border border-rose-200/80 text-left transition-all cursor-pointer touch-target"
                   >
-                    <div className="w-8 h-8 rounded-lg bg-rose-600 text-white flex items-center justify-center mb-2 shadow-xs">
-                      <IconWarning className="w-4 h-4" />
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-rose-600 text-white flex items-center justify-center mb-2 shadow-xs">
+                      <IconWarning className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     </div>
-                    <span className="font-bold text-xs text-rose-950 block">Report Hazard</span>
-                    <span className="text-[10px] text-rose-700 block mt-0.5">Broadcast Roadblock</span>
+                    <span className="font-bold text-xs text-rose-950 block truncate">Report Hazard</span>
+                    <span className="text-[10px] text-rose-700 block mt-0.5 truncate">Broadcast Roadblock</span>
                   </button>
                 </div>
               </div>
 
               {/* Current Active In-Transit Journey Summary */}
-              <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-card">
-                <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-3">
+              <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 sm:p-5 shadow-card">
+                <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2.5 sm:pb-3">
                   <div>
-                    <h3 className="font-heading font-bold text-sm text-[#0B1220]">
+                    <h3 className="font-heading font-bold text-xs sm:text-sm text-[#0B1220]">
                       Current In-Transit Journeys
                     </h3>
-                    <p className="text-xs text-slate-500">Live monitored vehicle movements on North East corridors</p>
+                    <p className="text-[11px] sm:text-xs text-slate-500">Live monitored vehicle movements on North East corridors</p>
                   </div>
                   {activeDeployments.length > 0 && (
                     <button
@@ -462,12 +471,12 @@ export default function UserDashboard() {
                 </div>
 
                 {activeDeployments.length === 0 ? (
-                  <div className="text-center py-8 bg-slate-50 rounded-2xl border border-slate-100 px-4">
-                    <div className="w-10 h-10 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center mx-auto mb-2">
-                      <IconDeployments className="w-5 h-5 text-slate-600" />
+                  <div className="text-center py-6 sm:py-8 bg-slate-50 rounded-xl sm:rounded-2xl border border-slate-100 px-3 sm:px-4">
+                    <div className="w-9 h-9 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center mx-auto mb-2">
+                      <IconDeployments className="w-4 h-4 text-slate-600" />
                     </div>
                     <p className="text-xs font-bold text-slate-700">No active transport journeys in transit</p>
-                    <p className="text-[11px] text-slate-500 mt-1">
+                    <p className="text-[11px] text-slate-500 mt-0.5">
                       {totalVehiclesCount === 0
                         ? 'Enrol your fleet units to begin dispatching regional journeys.'
                         : `${availCount} vehicle(s) ready at depot for corridor dispatch.`}
@@ -478,36 +487,36 @@ export default function UserDashboard() {
                           setPreselectedDeployVehicle(null);
                           setDeployModalOpen(true);
                         }}
-                        className="mt-3 px-4 py-2 bg-[#2563EB] text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition-colors cursor-pointer shadow-xs touch-target"
+                        className="mt-3 px-3.5 py-1.5 bg-[#2563EB] text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition-colors cursor-pointer shadow-xs touch-target sm:min-h-0"
                       >
                         Dispatch Journey Now
                       </button>
                     )}
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-2.5 sm:space-y-3">
                     {activeDeployments.slice(0, 3).map((d) => (
                       <div
                         key={d.id}
-                        className="p-3.5 rounded-xl bg-slate-50/90 border border-slate-200 hover:border-slate-300 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs"
+                        className="p-3 sm:p-3.5 rounded-xl bg-slate-50/90 border border-slate-200 hover:border-slate-300 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 shadow-xs"
                       >
-                        <div className="flex items-start gap-3">
-                          <div className="w-9 h-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-[#2563EB] shrink-0 shadow-xs">
-                            <IconTruck className="w-5 h-5 text-blue-600" />
+                        <div className="flex items-start gap-2.5 sm:gap-3 min-w-0">
+                          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-[#2563EB] shrink-0 shadow-xs">
+                            <IconTruck className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
                           </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono font-bold text-xs text-[#0B1220] bg-white px-2 py-0.5 rounded-md border border-slate-200">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                              <span className="font-mono font-bold text-xs text-[#0B1220] bg-white px-1.5 py-0.2 rounded border border-slate-200">
                                 {d.vehiclePlate || d.vehicleId}
                               </span>
                               <StatusChip variant="success" size="sm">
                                 {d.status || 'ACTIVE'}
                               </StatusChip>
                             </div>
-                            <h4 className="font-bold text-xs sm:text-sm text-[#0B1220] mt-1">
+                            <h4 className="font-bold text-xs sm:text-sm text-[#0B1220] mt-1 truncate">
                               {d.origin} → {d.destination}
                             </h4>
-                            <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                            <p className="text-[10px] sm:text-[11px] text-slate-500 font-mono mt-0.5 truncate">
                               Cargo: <strong className="text-slate-700">{d.cargo}</strong> • {d.assignedCorridor || 'Corridor'}
                             </p>
                           </div>
@@ -516,14 +525,14 @@ export default function UserDashboard() {
                         <div className="flex items-center justify-between sm:justify-end gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-200">
                           <button
                             onClick={() => handleReportWithContext(d)}
-                            className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+                            className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-[11px] rounded-lg transition-colors cursor-pointer flex items-center gap-1 touch-target sm:min-h-0"
                           >
                             <IconWarning className="w-3 h-3 text-rose-600" />
                             <span>Report Issue</span>
                           </button>
                           <button
                             onClick={() => handleSelectTab('DEPLOYMENTS')}
-                            className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold text-xs rounded-lg transition-colors cursor-pointer"
+                            className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold text-[11px] rounded-lg transition-colors cursor-pointer touch-target sm:min-h-0"
                           >
                             Details →
                           </button>
@@ -540,21 +549,21 @@ export default function UserDashboard() {
           {/* SCREEN 2: MAP (Consolidated GIS + Disruptions + Weather) */}
           {/* ========================================================= */}
           {activeTab === 'MAP' && (
-            <div className="space-y-4 animate-fade-in">
-              <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex items-center justify-between">
-                <div>
-                  <h2 className="text-base font-heading font-bold text-slate-900">
+            <div className="space-y-3.5 sm:space-y-4 animate-fade-in">
+              <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 sm:p-4 shadow-card flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="text-sm sm:text-base font-heading font-bold text-slate-900 truncate">
                     Regional GIS Intelligence Center
                   </h2>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Live corridor passability, active fleet GPS tracking, disaster hazard markers, and weather
+                  <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 truncate">
+                    Live corridor passability, active GPS telemetry, and weather
                   </p>
                 </div>
                 <button
                   onClick={() => setRoutePlannerOpen(true)}
-                  className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer"
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer touch-target sm:min-h-0 shrink-0"
                 >
-                  <IconRoute className="w-4 h-4" />
+                  <IconRoute className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   <span>Plan Route</span>
                 </button>
               </div>
@@ -594,70 +603,70 @@ export default function UserDashboard() {
           {/* SCREEN 5: MORE (Alerts, Profile, Platform Info, Logout) */}
           {/* ========================================================= */}
           {activeTab === 'MORE' && (
-            <div className="space-y-4 max-w-4xl mx-auto animate-fade-in">
+            <div className="space-y-3.5 sm:space-y-4 max-w-4xl mx-auto animate-fade-in">
               {/* Profile Card */}
-              <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-card">
-                <div className="flex items-center gap-3.5 pb-4 border-b border-slate-100">
-                  <div className="w-12 h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-bold text-lg">
+              <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-card">
+                <div className="flex items-center gap-3 pb-3.5 border-b border-slate-100">
+                  <div className="w-11 h-11 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold text-base shadow-xs shrink-0">
                     {currentUser?.fullName?.charAt(0) || 'O'}
                   </div>
-                  <div>
-                    <h3 className="font-heading font-bold text-base text-slate-900">
-                      {currentUser?.fullName || 'Logistics Operator'}
-                    </h3>
-                    <p className="text-xs text-slate-500 font-mono mt-0.5">{currentUser?.email}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-900 text-[10px] font-bold font-mono uppercase">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-heading font-bold text-sm sm:text-base text-slate-900 truncate">
+                        {currentUser?.fullName || 'Logistics Operator'}
+                      </h3>
+                      <span className="px-1.5 py-0.2 rounded-md bg-blue-100 text-blue-900 text-[9px] font-bold font-mono uppercase">
                         {currentUser?.role || 'OPERATOR'}
                       </span>
-                      <span className="text-[11px] text-slate-500">
-                        {currentUser?.organization || 'Assam Regional Fleet'}
-                      </span>
                     </div>
+                    <p className="text-xs text-slate-500 font-mono truncate mt-0.5">{currentUser?.email}</p>
+                    <p className="text-[11px] text-slate-600 mt-0.5 truncate">
+                      {currentUser?.organization || 'Assam Regional Fleet'}
+                    </p>
                   </div>
                 </div>
 
-                <div className="pt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                    <span className="text-slate-400 block text-[10px] font-mono">Assigned Vehicles</span>
-                    <strong className="text-base text-slate-900">{totalVehiclesCount}</strong>
+                <div className="pt-3.5 grid grid-cols-3 gap-2 text-xs">
+                  <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-center">
+                    <span className="text-slate-400 block text-[9px] font-mono">Assigned</span>
+                    <strong className="text-sm sm:text-base text-slate-900 font-mono">{totalVehiclesCount}</strong>
                   </div>
-                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                    <span className="text-slate-400 block text-[10px] font-mono">Completed Missions</span>
-                    <strong className="text-base text-slate-900">{totalDeploymentsCount}</strong>
+                  <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-center">
+                    <span className="text-slate-400 block text-[9px] font-mono">Missions</span>
+                    <strong className="text-sm sm:text-base text-slate-900 font-mono">{totalDeploymentsCount}</strong>
                   </div>
-                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                    <span className="text-slate-400 block text-[10px] font-mono">Platform Standard</span>
-                    <strong className="text-base text-slate-900">IST / WGS-84</strong>
+                  <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-center">
+                    <span className="text-slate-400 block text-[9px] font-mono">Datum</span>
+                    <strong className="text-xs sm:text-sm text-slate-900 font-mono truncate block">IST / WGS-84</strong>
                   </div>
                 </div>
               </div>
 
               {/* Active Alerts List */}
-              <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-card">
+              <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-card">
                 <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
                   <div className="flex items-center gap-2">
-                    <IconWarning className="w-5 h-5 text-rose-600" />
-                    <h3 className="font-heading font-bold text-sm text-slate-900">
+                    <IconWarning className="w-4 h-4 text-rose-600" />
+                    <h3 className="font-heading font-bold text-xs sm:text-sm text-slate-900">
                       Regional Disruption Advisories
                     </h3>
                   </div>
-                  <span className="text-xs font-mono font-bold text-slate-500">
+                  <span className="text-[11px] font-mono font-bold text-slate-500">
                     {alerts.length} Active
                   </span>
                 </div>
 
                 {alerts.length === 0 ? (
-                  <div className="p-6 text-center text-slate-400 text-xs">
+                  <div className="p-4 text-center text-slate-400 text-xs">
                     No active advisories reported in the North Eastern network.
                   </div>
                 ) : (
-                  <div className="space-y-2.5">
+                  <div className="space-y-2">
                     {alerts.map((al) => (
                       <div key={al.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-xs">
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="font-bold text-slate-900">{al.headline}</span>
-                          <span className="text-[10px] font-bold text-rose-700 uppercase bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                        <div className="flex justify-between items-center gap-2 mb-1">
+                          <span className="font-bold text-slate-900 truncate">{al.headline}</span>
+                          <span className="text-[9px] font-bold text-rose-700 uppercase bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200 shrink-0">
                             {al.level}
                           </span>
                         </div>
@@ -675,9 +684,9 @@ export default function UserDashboard() {
                   await logout();
                   window.location.href = '/login';
                 }}
-                className="w-full py-3 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs rounded-2xl shadow-xs transition-colors cursor-pointer touch-target"
+                className="w-full py-3 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer touch-target flex items-center justify-center gap-2"
               >
-                Sign Out of Operator Session
+                <span>Sign Out of Operator Session</span>
               </button>
             </div>
           )}

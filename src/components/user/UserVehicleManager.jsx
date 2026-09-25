@@ -86,9 +86,9 @@ export default function UserVehicleManager({ onDeployVehicle }) {
       {/* Top Controls & Segmented Filter Bar */}
       <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-card">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h2 className="text-base font-heading font-bold text-[#0B1220]">
+              <h2 className="text-base font-heading font-bold text-[#0B1220] truncate">
                 Registered Fleet Assets
               </h2>
               <InfoPopover conceptKey="STATE_FLEET" iconSize="w-3.5 h-3.5" />
@@ -100,7 +100,7 @@ export default function UserVehicleManager({ onDeployVehicle }) {
 
           <button
             onClick={() => setRegisterModalOpen(true)}
-            className="px-4 py-2 bg-[#0B1220] hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-2 cursor-pointer shrink-0 touch-target"
+            className="w-full sm:w-auto px-4 py-2 bg-[#0B1220] hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0 touch-target"
           >
             <IconPlus className="w-4 h-4" />
             <span>Register Vehicle</span>
@@ -108,7 +108,7 @@ export default function UserVehicleManager({ onDeployVehicle }) {
         </div>
 
         {/* Filter Pills */}
-        <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl overflow-x-auto pb-1 max-w-md">
+        <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl overflow-x-auto pb-1 max-w-md w-full">
           {[
             { id: 'ALL', label: `All (${vehicles.length})` },
             { id: 'ACTIVE', label: `In Transit (${activeCount})` },
@@ -139,7 +139,7 @@ export default function UserVehicleManager({ onDeployVehicle }) {
             placeholder="Search license plate, driver name, vehicle type..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-600 focus:bg-white outline-hidden transition-all text-slate-800 placeholder:text-slate-400"
+            className="w-full pl-9 pr-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-600 focus:bg-white outline-hidden transition-all text-slate-800 placeholder:text-slate-400 min-h-[38px] sm:min-h-0"
           />
         </div>
       </div>
@@ -148,29 +148,29 @@ export default function UserVehicleManager({ onDeployVehicle }) {
       {actionError && (
         <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center justify-between animate-fade-in">
           <span>{actionError}</span>
-          <button onClick={() => setActionError(null)} className="font-bold text-rose-700 ml-2">✕</button>
+          <button onClick={() => setActionError(null)} className="font-bold text-rose-700 ml-2 cursor-pointer">✕</button>
         </div>
       )}
       {actionSuccess && (
         <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs flex items-center justify-between animate-fade-in">
           <span>{actionSuccess}</span>
-          <button onClick={() => setActionSuccess(null)} className="font-bold text-emerald-700 ml-2">✕</button>
+          <button onClick={() => setActionSuccess(null)} className="font-bold text-emerald-700 ml-2 cursor-pointer">✕</button>
         </div>
       )}
 
       {/* Vehicles List */}
       {vehiclesLoading ? (
-        <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center text-slate-400">
-          <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+        <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center text-slate-400 shadow-card">
+          <div className="w-7 h-7 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
           <span className="text-xs font-semibold">Synchronizing fleet directory...</span>
         </div>
       ) : filteredVehicles.length === 0 ? (
-        <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center">
-          <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-3">
-            <IconTruck className="w-6 h-6" />
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-6 sm:p-8 text-center shadow-card">
+          <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-2.5">
+            <IconTruck className="w-5 h-5" />
           </div>
           <h3 className="text-sm font-bold text-slate-800">No Fleet Vehicles Found</h3>
-          <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-4">
+          <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-3.5">
             {searchTerm || statusFilter !== 'ALL'
               ? 'No registered vehicles match your active search filters.'
               : 'Register your first vehicle unit to start dispatching corridor transport.'}
@@ -193,23 +193,23 @@ export default function UserVehicleManager({ onDeployVehicle }) {
             return (
               <div
                 key={v.id}
-                className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-card hover:shadow-card-hover transition-all flex flex-col justify-between"
+                className="bg-white border border-slate-200/90 rounded-2xl p-3.5 sm:p-4 shadow-card hover:shadow-card-hover transition-all flex flex-col justify-between"
               >
                 <div>
-                  <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-100 mb-3">
-                    <div className="flex items-start gap-3 min-w-0">
-                      <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 shrink-0">
-                        <IconTruck className="w-5 h-5 text-slate-800" />
+                  <div className="flex items-start justify-between gap-2.5 pb-2.5 border-b border-slate-100 mb-2.5">
+                    <div className="flex items-start gap-2.5 min-w-0">
+                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 shrink-0">
+                        <IconTruck className="w-4 h-4 sm:w-5 sm:h-5 text-slate-800" />
                       </div>
-                      <div className="truncate">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-extrabold text-xs text-slate-900 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-mono font-extrabold text-xs text-slate-900 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200 shrink-0">
                             {v.licensePlate || v.id}
                           </span>
                           <span className="text-xs font-bold text-slate-700 truncate">{v.name}</span>
                         </div>
                         <p className="text-xs text-slate-500 mt-0.5 truncate">{v.type}</p>
-                        <p className="text-[11px] font-mono text-slate-600 mt-0.5">
+                        <p className="text-[11px] font-mono text-slate-600 mt-0.5 truncate">
                           Driver: <strong className="text-slate-800">{v.driverName}</strong> • {v.driverPhone}
                         </p>
                       </div>
@@ -221,12 +221,12 @@ export default function UserVehicleManager({ onDeployVehicle }) {
                   </div>
 
                   {/* Corridor & Location Details */}
-                  <div className="bg-slate-50 rounded-xl p-2.5 text-xs text-slate-600 flex flex-wrap items-center justify-between gap-2 mb-3">
-                    <div>
+                  <div className="bg-slate-50 rounded-xl p-2.5 text-xs text-slate-600 flex flex-wrap items-center justify-between gap-2 mb-2.5">
+                    <div className="truncate">
                       <span className="text-slate-400">Location: </span>
                       <strong className="text-slate-800">{v.currentLocationName || (v.origin ? `${v.origin} Hub` : 'Guwahati Staging Hub')}</strong>
                     </div>
-                    <div>
+                    <div className="shrink-0">
                       <span className="text-slate-400">Capacity: </span>
                       <strong className="text-slate-800">{v.cargoCapacityKg || 5000} kg</strong>
                     </div>
@@ -235,17 +235,17 @@ export default function UserVehicleManager({ onDeployVehicle }) {
 
                 {/* Card Action Hub */}
                 <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1">
                     <button
                       onClick={() => setEditingVehicle(v)}
-                      className="text-slate-600 hover:text-slate-900 font-semibold px-2.5 py-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+                      className="text-slate-600 hover:text-slate-900 font-semibold px-2.5 py-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer touch-target sm:min-h-0"
                     >
                       Edit
                     </button>
                     <button
                       onClick={() => handleDeleteVehicle(v)}
                       disabled={deletingVehicleId === v.id || isDeployed}
-                      className="text-rose-600 hover:text-rose-800 disabled:opacity-30 font-semibold px-2.5 py-1.5 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
+                      className="text-rose-600 hover:text-rose-800 disabled:opacity-30 font-semibold px-2.5 py-1.5 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer touch-target sm:min-h-0"
                     >
                       Decommission
                     </button>

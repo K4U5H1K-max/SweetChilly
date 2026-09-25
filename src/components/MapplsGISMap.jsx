@@ -487,7 +487,7 @@ export default function MapplsGISMap({
           {activeRoute && (
             <button
               onClick={() => setLayers((prev) => ({ ...prev, route: !prev.route }))}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer touch-target sm:min-h-0 ${
                 layers.route
                   ? 'bg-blue-600 text-white shadow-xs'
                   : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
@@ -499,7 +499,7 @@ export default function MapplsGISMap({
 
           <button
             onClick={() => setLayers((prev) => ({ ...prev, incidents: !prev.incidents }))}
-            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer touch-target sm:min-h-0 ${
               layers.incidents
                 ? 'bg-rose-600 text-white shadow-xs'
                 : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
@@ -510,7 +510,7 @@ export default function MapplsGISMap({
 
           <button
             onClick={() => setLayers((prev) => ({ ...prev, vehicles: !prev.vehicles }))}
-            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer touch-target sm:min-h-0 ${
               layers.vehicles
                 ? 'bg-slate-900 text-white shadow-xs'
                 : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
@@ -521,7 +521,7 @@ export default function MapplsGISMap({
 
           <button
             onClick={() => setLayers((prev) => ({ ...prev, weather: !prev.weather }))}
-            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer touch-target sm:min-h-0 ${
               layers.weather
                 ? 'bg-indigo-600 text-white shadow-xs'
                 : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
@@ -533,7 +533,7 @@ export default function MapplsGISMap({
           <button
             onClick={handleRecenter}
             title="Reset Map to Regional NER View"
-            className="px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 text-xs font-bold transition-all whitespace-nowrap cursor-pointer"
+            className="px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 text-xs font-bold transition-all whitespace-nowrap cursor-pointer touch-target sm:min-h-0"
           >
             ↺ Reset
           </button>
@@ -625,7 +625,7 @@ export default function MapplsGISMap({
                       onPlanBypass(selectedItem.data);
                       setSelectedItem(null);
                     }}
-                    className="w-full mt-1 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="w-full mt-1 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer touch-target sm:min-h-0"
                   >
                     <IconRoute className="w-3.5 h-3.5" />
                     <span>Calculate Tactical Bypass</span>
@@ -651,7 +651,7 @@ export default function MapplsGISMap({
                   {onOpenSafetyModal && (
                     <button
                       onClick={() => onOpenSafetyModal(selectedItem.data.id)}
-                      className="flex-1 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors text-center text-xs"
+                      className="flex-1 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors text-center text-xs touch-target sm:min-h-0"
                     >
                       Safety Check
                     </button>
@@ -659,7 +659,7 @@ export default function MapplsGISMap({
                   {onOpenDeployModal && (
                     <button
                       onClick={() => onOpenDeployModal(selectedItem.data.id)}
-                      className="flex-1 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg transition-colors text-center text-xs"
+                      className="flex-1 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg transition-colors text-center text-xs touch-target sm:min-h-0"
                     >
                       Deploy
                     </button>
@@ -699,37 +699,37 @@ export default function MapplsGISMap({
       </div>
 
       {/* Bottom Map Legend */}
-      <div className="border-t border-slate-100 bg-slate-50/70 px-3.5 sm:px-4 py-2 flex flex-wrap items-center justify-between gap-2.5 text-xs text-slate-600">
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="font-bold text-slate-700 text-xs">Legend:</span>
+      <div className="border-t border-slate-100 bg-slate-50/70 px-3.5 sm:px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-[11px] sm:text-xs text-slate-600">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <span className="font-bold text-slate-700">Legend:</span>
           
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1">
             <span className="w-2.5 h-2.5 rounded-full bg-rose-600 inline-block"></span>
             <span>Disruption</span>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1">
             <span className="w-2.5 h-2.5 rounded-full bg-slate-900 inline-block"></span>
             <span>Fleet</span>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1">
             <span className="w-3.5 h-0.5 bg-rose-600 inline-block border-t border-dashed border-rose-300"></span>
-            <span>Blocked Corridor</span>
+            <span>Blocked</span>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1">
             <span className="w-3.5 h-0.5 bg-slate-700 inline-block"></span>
             <span>Open Highway</span>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1">
             <span className="w-3.5 h-1 bg-blue-600 rounded-full inline-block"></span>
             <span>Active Route</span>
           </div>
         </div>
 
-        <div className="text-[11px] text-slate-400 font-mono">
+        <div className="text-[10px] sm:text-[11px] text-slate-400 font-mono">
           WGS-84 • 8 NE States
         </div>
       </div>
