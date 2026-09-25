@@ -159,7 +159,7 @@ export default function UserDashboard() {
   ];
 
   return (
-    <div className="w-full flex flex-col font-sans bg-[#F5F7FA] flex-1">
+    <div className={`w-full flex flex-col font-sans bg-[#F5F7FA] flex-1 min-h-0 ${activeTab === 'MAP' ? 'h-[100dvh] max-h-[100dvh] overflow-hidden md:overflow-visible md:h-auto pb-14 md:pb-8' : 'pb-20 md:pb-8'}`}>
       {/* ==================== MOBILE APP HEADER ==================== */}
       <div className="md:hidden">
         <MobileAppHeader
@@ -260,8 +260,8 @@ export default function UserDashboard() {
       </section>
 
       {/* ==================== MAIN SCREEN WORKSPACE ==================== */}
-      <main className="w-full flex-1 py-3.5 sm:py-6 px-3 sm:px-6 lg:px-8 pb-28 md:pb-8">
-        <div className="max-w-7xl mx-auto flex flex-col gap-3.5 sm:gap-6">
+      <main className={`w-full flex-1 min-h-0 flex flex-col ${activeTab === 'MAP' ? 'py-2 sm:py-6 px-2 sm:px-6 lg:px-8 pb-0' : 'py-3.5 sm:py-6 px-3 sm:px-6 lg:px-8'}`}>
+        <div className="max-w-7xl mx-auto w-full flex-1 min-h-0 flex flex-col gap-3.5 sm:gap-6">
           {/* Action Success Alert Notification */}
           {actionSuccessMsg && (
             <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between shadow-xs animate-fade-in">
@@ -549,8 +549,8 @@ export default function UserDashboard() {
           {/* SCREEN 2: MAP (Consolidated GIS + Disruptions + Weather) */}
           {/* ========================================================= */}
           {activeTab === 'MAP' && (
-            <div className="space-y-3.5 sm:space-y-4 animate-fade-in">
-              <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 sm:p-4 shadow-card flex items-center justify-between gap-3">
+            <div className="space-y-2 sm:space-y-4 animate-fade-in w-full flex-1 min-h-0 flex flex-col">
+              <div className="hidden sm:flex bg-white border border-slate-200/90 rounded-2xl p-3 sm:p-4 shadow-card items-center justify-between gap-3 shrink-0">
                 <div className="min-w-0">
                   <h2 className="text-sm sm:text-base font-heading font-bold text-slate-900 truncate">
                     Regional GIS Intelligence Center
@@ -570,6 +570,7 @@ export default function UserDashboard() {
 
               <MapplsGISMap
                 fullHeight={true}
+                className="flex-1 min-h-0"
                 onPlanBypass={(alert) => setRoutePlannerOpen(true)}
                 onOpenDeployModal={handleDeploySpecificVehicle}
               />

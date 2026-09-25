@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { IconInfo } from './AppIcons';
 
 export const INFO_DEFINITIONS = {
@@ -9,6 +10,18 @@ export const INFO_DEFINITIONS = {
   STATE_FLEET: {
     title: 'Operator State Fleet',
     explanation: 'Total registered fleet assets assigned to this tenant organization across regional logistics hubs in the 8 North Eastern States.',
+  },
+  ACTIVE_DEPLOYMENTS: {
+    title: 'Active Deployments',
+    explanation: 'Vehicles currently dispatched on active freight transit missions along designated arterial corridors.',
+  },
+  DISTRICTS_MONITORED: {
+    title: 'Districts Monitored',
+    explanation: 'Total strategic districts and state capital logistics clusters currently tracked for route connectivity and disruption status.',
+  },
+  CORRIDOR_DELAY: {
+    title: 'Average Corridor Delay',
+    explanation: 'Aggregate transit delay incurred across arterial highway corridors due to weather hazards, landslides, or roadblock checkpoints.',
   },
   SAFETY_STATUS: {
     title: 'Safety Evaluation Status',
@@ -47,18 +60,18 @@ export default function InfoPopover({
   className = '',
   iconSize = 'w-3.5 h-3.5',
   buttonLabel = 'Information details',
-  placement = 'top', // 'top' | 'bottom' | 'left' | 'right'
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const containerRef = useRef(null);
+  const triggerRef = useRef(null);
   const closeTimeoutRef = useRef(null);
 
   const def = conceptKey && INFO_DEFINITIONS[conceptKey] ? INFO_DEFINITIONS[conceptKey] : null;
   const displayTitle = title || def?.title || 'Operational Information';
   const displayExplanation = explanation || def?.explanation || 'Operational metric provided by Project Brahmaputra platform.';
 
-  // Detect touch/mobile environment
+  // Detect touch/mobile viewport
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768 || 'ontouchstart' in window);
@@ -68,19 +81,52 @@ export default function InfoPopover({
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  const handleClose = useCallback(() => {
+    setIsOpen(false);
+    if (triggerRef.current) {
+      triggerRef.current.focus();
+    }
+  }, []);
+
+  // Lock background scroll when mobile info sheet is active, preserving exact scroll position
+  useEffect(() => {
+    if (!isOpen || !isMobile) return;
+
+    const scrollY = window.scrollY || document.documentElement.scrollTop;
+    const originalStyle = {
+      position: document.body.style.position,
+      top: document.body.style.top,
+      width: document.body.style.width,
+      overflow: document.body.style.overflow,
+    };
+
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = '100%';
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.position = originalStyle.position;
+      document.body.style.top = originalStyle.top;
+      document.body.style.width = originalStyle.width;
+      document.body.style.overflow = originalStyle.overflow;
+      window.scrollTo(0, scrollY);
+    };
+  }, [isOpen, isMobile]);
+
   // Handle outside clicks / ESC key dismissal
   useEffect(() => {
     if (!isOpen) return;
 
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
-        setIsOpen(false);
+        handleClose();
       }
     };
 
     const handleClickOutside = (e) => {
-      if (containerRef.current && !containerRef.current.contains(e.target)) {
-        setIsOpen(false);
+      if (!isMobile && containerRef.current && !containerRef.current.contains(e.target)) {
+        handleClose();
       }
     };
 
@@ -93,7 +139,7 @@ export default function InfoPopover({
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('touchstart', handleClickOutside);
     };
-  }, [isOpen]);
+  }, [isOpen, isMobile, handleClose]);
 
   // Desktop Hover Handlers
   const handleMouseEnter = () => {
@@ -131,11 +177,13 @@ export default function InfoPopover({
       onMouseLeave={handleMouseLeave}
     >
       <button
+        ref={triggerRef}
         type="button"
         onClick={handleToggle}
         onKeyDown={handleKeyDownTrigger}
         aria-label={`${buttonLabel}: ${displayTitle}`}
         aria-expanded={isOpen}
+        aria-haspopup="dialog"
         className="inline-flex items-center justify-center p-0.5 rounded-full text-slate-400 hover:text-blue-600 focus:text-blue-600 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30 transition-colors cursor-pointer"
         tabIndex={0}
       >
@@ -163,55 +211,63 @@ export default function InfoPopover({
         </div>
       )}
 
-      {/* MOBILE TOUCH POPOVER / BOTTOM SHEET DIALOG */}
-      {isOpen && isMobile && (
+      {/* MOBILE TOUCH POPOVER / PORTALED BOTTOM SHEET DIALOG */}
+      {isOpen && isMobile && typeof document !== 'undefined' && createPortal(
         <div
-          className="fixed inset-0 z-500 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in"
-          onClick={() => setIsOpen(false)}
+          className="fixed inset-0 z-500 bg-slate-900/60 backdrop-blur-xs flex items-end justify-center p-0 animate-fade-in touch-none"
+          onClick={handleClose}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="info-sheet-title"
         >
           <div
-            className="w-full sm:max-w-sm bg-white rounded-t-2xl sm:rounded-2xl p-5 shadow-2xl pb-safe space-y-3 text-left font-sans animate-in slide-in-from-bottom-5 duration-200"
+            className="w-full max-w-lg bg-white rounded-t-2xl shadow-2xl p-4 sm:p-5 pb-[calc(1rem+env(safe-area-inset-bottom))] space-y-3 text-left font-sans animate-in slide-in-from-bottom-3 duration-200 z-[501] pointer-events-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto sm:hidden mb-2"></div>
-            
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2">
+            {/* Drag Handle */}
+            <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto mb-1"></div>
+
+            {/* Header Row */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+              <div className="flex items-center gap-2 min-w-0 pr-2">
                 <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
                   <IconInfo className="w-4 h-4" />
                 </div>
-                <h4 className="font-heading font-bold text-sm text-slate-900">
+                <h4 id="info-sheet-title" className="font-heading font-bold text-sm text-slate-900 truncate">
                   {displayTitle}
                 </h4>
               </div>
               <button
                 type="button"
-                onClick={() => setIsOpen(false)}
-                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center text-xs font-bold transition-colors cursor-pointer"
+                onClick={handleClose}
+                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center text-xs font-bold transition-colors cursor-pointer shrink-0"
                 aria-label="Close information"
               >
                 ✕
               </button>
             </div>
 
+            {/* Explanation Content */}
             <div className="bg-slate-50 border border-slate-100 rounded-xl p-3.5">
-              <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 font-mono">
-                Explanation & Meaning
+              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 font-mono">
+                Explanation & Context
               </div>
               <p className="text-xs text-slate-700 leading-relaxed">
                 {displayExplanation}
               </p>
             </div>
 
+            {/* Action Button */}
             <button
               type="button"
-              onClick={() => setIsOpen(false)}
+              onClick={handleClose}
               className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer touch-target transition-colors"
             >
               Got it
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

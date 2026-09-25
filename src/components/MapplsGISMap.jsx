@@ -11,6 +11,7 @@ import {
   IconShield,
   IconPin,
   IconClose,
+  IconRefresh,
 } from './common/AppIcons';
 import InfoPopover from './common/InfoPopover';
 
@@ -25,6 +26,7 @@ export default function MapplsGISMap({
   onOpenVehicleHistory,
   onPlanBypass,
   fullHeight = false,
+  className = '',
 }) {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -113,11 +115,45 @@ export default function MapplsGISMap({
     };
   }, [mapplsApiKey]);
 
-  // Recenter Map
-  const handleRecenter = useCallback(() => {
+  // Refresh & Recenter Map View
+  const handleRefresh = useCallback(() => {
     if (mapInstanceRef.current) {
-      mapInstanceRef.current.flyTo([25.85, 92.70], 7, { duration: 1.0 });
+      mapInstanceRef.current.flyTo([25.85, 92.70], 7, { duration: 0.8 });
+      mapInstanceRef.current.invalidateSize();
     }
+  }, []);
+
+  // Responsive Resize Observer & Size Invalidation for Leaflet Canvas
+  useEffect(() => {
+    if (!mapInstanceRef.current || !mapContainerRef.current) return;
+
+    const map = mapInstanceRef.current;
+    map.invalidateSize();
+
+    let resizeObserver = null;
+    if (window.ResizeObserver) {
+      resizeObserver = new ResizeObserver(() => {
+        map.invalidateSize();
+      });
+      resizeObserver.observe(mapContainerRef.current);
+    }
+
+    const handleWindowResize = () => {
+      map.invalidateSize();
+    };
+    window.addEventListener('resize', handleWindowResize);
+    window.addEventListener('orientationchange', handleWindowResize);
+
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+    }, 200);
+
+    return () => {
+      if (resizeObserver) resizeObserver.disconnect();
+      window.removeEventListener('resize', handleWindowResize);
+      window.removeEventListener('orientationchange', handleWindowResize);
+      clearTimeout(timer);
+    };
   }, []);
 
   // Update Arterial Highway Corridors
@@ -247,8 +283,17 @@ export default function MapplsGISMap({
     if (!layers.incidents) return;
 
     incidents.forEach((inc) => {
+      if (inc.lat === null || inc.lat === undefined || inc.lng === null || inc.lng === undefined || isNaN(Number(inc.lat)) || isNaN(Number(inc.lng))) {
+        return;
+      }
+
       const isCritical = inc.severity === 'CRITICAL' || inc.severity === 'HIGH';
+      const isCaution = inc.severity === 'MEDIUM' || inc.severity === 'MODERATE';
       const isSelected = selectedIncidentId === inc.id;
+
+      let badgeBg = 'bg-blue-600';
+      if (isCritical) badgeBg = 'bg-rose-600';
+      else if (isCaution) badgeBg = 'bg-amber-500';
 
       const markerIcon = L.divIcon({
         className: 'custom-incident-marker',
@@ -261,9 +306,7 @@ export default function MapplsGISMap({
                 ? '<div class="absolute w-7 h-7 rounded-full bg-rose-500/30 animate-ping"></div>'
                 : ''
             }
-            <div class="w-6 h-6 rounded-full flex items-center justify-center text-white shadow-lg border-2 border-white ${
-              isCritical ? 'bg-rose-600' : 'bg-amber-500'
-            }">
+            <div class="w-6 h-6 rounded-full flex items-center justify-center text-white shadow-lg border-2 border-white ${badgeBg}">
               <span class="text-xs font-bold">!</span>
             </div>
           </div>
@@ -272,7 +315,7 @@ export default function MapplsGISMap({
         iconAnchor: [12, 12],
       });
 
-      const marker = L.marker([inc.lat, inc.lng], { icon: markerIcon });
+      const marker = L.marker([Number(inc.lat), Number(inc.lng)], { icon: markerIcon });
 
       marker.on('click', () => {
         setSelectedItem({ type: 'INCIDENT', data: inc });
@@ -294,22 +337,18 @@ export default function MapplsGISMap({
 
     if (!layers.vehicles) return;
 
-    // Operational GIS map displays vehicles with active deployment or registered in fleet
+    // Operational GIS map displays vehicles with legitimate persisted or deployment coordinates
     const activeVehicles = vehicles.filter((veh) => {
-      if (veh.hasActiveDeployment !== undefined) {
-        return Boolean(veh.hasActiveDeployment);
+      if (!veh.currentPos || veh.currentPos.lat === null || veh.currentPos.lat === undefined || veh.currentPos.lng === null || veh.currentPos.lng === undefined || isNaN(Number(veh.currentPos.lat)) || isNaN(Number(veh.currentPos.lng))) {
+        return false;
       }
-      if (veh.deploymentStatus) {
-        return ['ACTIVE', 'DELAYED', 'PLANNED'].includes(veh.deploymentStatus);
-      }
-      return false;
+      return true;
     });
 
     activeVehicles.forEach((veh) => {
-      if (!veh.currentPos) return;
-
       const isSelected = selectedVehicleId === veh.id;
-      const statusNormalized = String(veh.status || 'IN_TRANSIT').toUpperCase().replace(/\s+/g, '_');
+      const isDeployed = Boolean(veh.hasActiveDeployment) || ['ACTIVE', 'DELAYED', 'PLANNED'].includes(veh.deploymentStatus);
+      const statusNormalized = String(veh.status || (isDeployed ? 'IN_TRANSIT' : 'AVAILABLE')).toUpperCase().replace(/\s+/g, '_');
       const isEmergency = veh.priority === 'EMERGENCY_CRITICAL' || statusNormalized === 'EMERGENCY';
       const isDelayed = statusNormalized === 'DELAYED';
       const isSafetyAlert = veh.isFlagged || veh.safetyStatus === 'BREAKDOWN' || veh.safetyStatus === 'ASSISTANCE_REQUIRED';
@@ -317,6 +356,7 @@ export default function MapplsGISMap({
       let markerBg = 'bg-slate-900';
       if (isEmergency || veh.safetyStatus === 'ASSISTANCE_REQUIRED') markerBg = 'bg-rose-600';
       else if (isSafetyAlert || isDelayed) markerBg = 'bg-amber-600';
+      else if (!isDeployed) markerBg = 'bg-slate-700';
 
       const vehicleIcon = L.divIcon({
         className: 'custom-vehicle-marker',
@@ -341,7 +381,7 @@ export default function MapplsGISMap({
         iconAnchor: [14, 14],
       });
 
-      const marker = L.marker([veh.currentPos.lat, veh.currentPos.lng], { icon: vehicleIcon });
+      const marker = L.marker([Number(veh.currentPos.lat), Number(veh.currentPos.lng)], { icon: vehicleIcon });
 
       marker.on('click', () => {
         setSelectedItem({ type: 'VEHICLE', data: veh });
@@ -470,9 +510,9 @@ export default function MapplsGISMap({
   }, [selectedVehicleId, vehicles]);
 
   return (
-    <div className="w-full bg-white rounded-2xl border border-slate-200/90 shadow-card flex flex-col relative overflow-hidden font-sans">
+    <div className={`w-full bg-white rounded-2xl border border-slate-200/90 shadow-card flex flex-col relative overflow-hidden font-sans flex-1 min-h-0 ${className}`}>
       {/* Top Map Control Bar */}
-      <div className="border-b border-slate-100 bg-slate-50/90 px-3.5 sm:px-4 py-2.5 flex flex-wrap items-center justify-between gap-2">
+      <div className="border-b border-slate-100 bg-slate-50/90 px-3.5 sm:px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 shrink-0">
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
           <span className="font-heading font-bold text-xs text-slate-800">
@@ -531,21 +571,21 @@ export default function MapplsGISMap({
           </button>
 
           <button
-            onClick={handleRecenter}
-            title="Reset Map to Regional NER View"
-            className="px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 text-xs font-bold transition-all whitespace-nowrap cursor-pointer touch-target sm:min-h-0"
+            onClick={handleRefresh}
+            title="Refresh & Recenter Map View"
+            className="px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 text-xs font-bold transition-all whitespace-nowrap cursor-pointer touch-target sm:min-h-0 flex items-center gap-1"
           >
-            ↺ Reset
+            <IconRefresh className="w-3.5 h-3.5 text-slate-600" />
+            <span>Refresh</span>
           </button>
         </div>
       </div>
 
       {/* Main Leaflet Map Canvas */}
-      <div className="relative w-full">
+      <div className="relative w-full flex-1 min-h-0 flex flex-col">
         <div
           ref={mapContainerRef}
-          className={`w-full ${fullHeight ? 'h-[520px] sm:h-[620px] md:h-[720px]' : 'h-[380px] sm:h-[480px] md:h-[560px]'} bg-slate-100 relative z-0`}
-          style={{ minHeight: '340px' }}
+          className={`w-full flex-1 min-h-[300px] sm:min-h-[420px] ${fullHeight ? 'h-full lg:min-h-[640px]' : 'h-[360px] sm:h-[480px] lg:h-[520px]'} bg-slate-100 relative z-0`}
         />
 
         {/* Floating Active Route Projection HUD */}

@@ -104,7 +104,27 @@ export function AppProvider({ children }) {
     }
   }, []);
 
-  // Check Backend Health & Hydrate Vehicles & Deployments on Mount
+  // Central Authoritative Incidents Refresh / Hydration Function
+  const refreshIncidents = useCallback(async () => {
+    try {
+      const res = await api.getIncidents();
+      if (res && res.success && Array.isArray(res.data)) {
+        setIncidents(res.data);
+        return res.data;
+      } else if (res && Array.isArray(res.data)) {
+        setIncidents(res.data);
+        return res.data;
+      } else if (Array.isArray(res)) {
+        setIncidents(res);
+        return res;
+      }
+    } catch (err) {
+      console.warn('[AppContext] Incidents hydration failed:', err.message);
+    }
+    return null;
+  }, []);
+
+  // Check Backend Health & Hydrate Vehicles, Deployments & Incidents on Mount
   useEffect(() => {
     let isMounted = true;
 
@@ -135,9 +155,9 @@ export function AppProvider({ children }) {
         }
       }
 
-      // 2. Authoritative Fleet & Deployments Hydration
+      // 2. Authoritative Fleet, Deployments & Incidents Hydration
       if (isMounted) {
-        await Promise.allSettled([refreshVehicles(), refreshDeployments()]);
+        await Promise.allSettled([refreshVehicles(), refreshDeployments(), refreshIncidents()]);
       }
     }
 
@@ -145,13 +165,14 @@ export function AppProvider({ children }) {
     return () => {
       isMounted = false;
     };
-  }, [refreshVehicles, refreshDeployments]);
+  }, [refreshVehicles, refreshDeployments, refreshIncidents]);
 
   // Re-hydrate vehicles & deployments whenever the authenticated session user changes
   useEffect(() => {
     if (currentUserId) {
       refreshVehicles();
       refreshDeployments();
+      refreshIncidents();
     }
   }, [currentUserId, refreshVehicles, refreshDeployments]);
 
@@ -302,6 +323,7 @@ export function AppProvider({ children }) {
       deleteVehicle,
       refreshVehicles,
       refreshDeployments,
+      refreshIncidents,
       createDeployment,
       completeDeployment,
       cancelDeployment,
@@ -333,6 +355,7 @@ export function AppProvider({ children }) {
       deleteVehicle,
       refreshVehicles,
       refreshDeployments,
+      refreshIncidents,
       createDeployment,
       completeDeployment,
       cancelDeployment,

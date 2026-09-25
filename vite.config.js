@@ -9,10 +9,16 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: [
         'favicon.svg',
+        'favicon-32x32.png',
+        'favicon-64x64.png',
         'pwa-192x192.png',
         'pwa-512x512.png',
         'maskable-icon-512x512.png',
         'apple-touch-icon-180x180.png',
+        'icons/brahmaputra-192.png',
+        'icons/brahmaputra-512.png',
+        'icons/brahmaputra-maskable-192.png',
+        'icons/brahmaputra-maskable-512.png',
         'assets/brahmaputra_emblem.png',
         'assets/brahmaputra_hero.jpg',
       ],
@@ -28,8 +34,20 @@ export default defineConfig({
         scope: '/',
         icons: [
           {
+            src: '/icons/brahmaputra-192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'any',
+          },
+          {
             src: '/pwa-192x192.png',
             sizes: '192x192',
+            type: 'image/png',
+            purpose: 'any',
+          },
+          {
+            src: '/icons/brahmaputra-512.png',
+            sizes: '512x512',
             type: 'image/png',
             purpose: 'any',
           },
@@ -40,8 +58,20 @@ export default defineConfig({
             purpose: 'any',
           },
           {
+            src: '/icons/brahmaputra-maskable-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+          {
             src: '/maskable-icon-512x512.png',
             sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+          {
+            src: '/icons/brahmaputra-maskable-192.png',
+            sizes: '192x192',
             type: 'image/png',
             purpose: 'maskable',
           },

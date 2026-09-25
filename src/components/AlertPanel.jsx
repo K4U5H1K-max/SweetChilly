@@ -4,13 +4,19 @@ import { formatIST } from '../utils/timeFormat';
 import { IconWarning, IconRoute, IconMap, IconPin } from './common/AppIcons';
 import InfoPopover from './common/InfoPopover';
 
-export default function AlertPanel({ onSelectIncident, selectedIncidentId, onPlanBypass }) {
+export default function AlertPanel({
+  onSelectIncident,
+  selectedIncidentId,
+  onPlanBypass,
+  className = '',
+  maxHeightClass = '',
+}) {
   const { alerts, incidents } = useApp();
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-card flex flex-col h-full overflow-hidden font-sans">
+    <div className={`bg-white rounded-2xl border border-slate-200/90 shadow-card flex flex-col h-full overflow-hidden font-sans ${className}`}>
       {/* Panel Header */}
-      <div className="border-b border-slate-100 bg-[#0B1220] text-white px-4 py-3 flex items-center justify-between">
+      <div className="border-b border-slate-100 bg-[#0B1220] text-white px-4 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-rose-500 inline-block animate-pulse"></span>
           <h3 className="font-heading font-bold text-xs text-white">
@@ -23,8 +29,8 @@ export default function AlertPanel({ onSelectIncident, selectedIncidentId, onPla
         </span>
       </div>
 
-      {/* Alert List Container */}
-      <div className="p-3 flex-1 overflow-y-auto max-h-[520px] space-y-2.5">
+      {/* Alert List Container - Fluidly scrollable inside container */}
+      <div className={`p-3 flex-1 min-h-0 overflow-y-auto space-y-2.5 ${maxHeightClass}`}>
         {alerts.length === 0 ? (
           <div className="p-8 text-center text-slate-400 text-xs">
             <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-2">
@@ -121,7 +127,7 @@ export default function AlertPanel({ onSelectIncident, selectedIncidentId, onPla
       </div>
 
       {/* Panel Bottom Feed Telemetry */}
-      <div className="border-t border-slate-100 bg-slate-50 px-4 py-2 flex items-center justify-between text-xs text-slate-500">
+      <div className="border-t border-slate-100 bg-slate-50 px-4 py-2 flex items-center justify-between text-xs text-slate-500 shrink-0">
         <span>Verified feeds: NHAI, BRO & State Police</span>
         <span className="text-emerald-700 font-semibold flex items-center gap-1">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>

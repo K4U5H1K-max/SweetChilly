@@ -62,9 +62,11 @@ export default function UserLayout({ children }) {
               className="flex items-center gap-2.5 sm:gap-3 cursor-pointer group min-w-0"
               onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
             >
-              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-slate-900 text-white flex items-center justify-center font-bold text-xs sm:text-sm shadow-xs group-hover:bg-blue-700 transition-colors shrink-0">
-                <span className="font-mono text-xs tracking-tighter">NER</span>
-              </div>
+            <img
+              src="/pwa-192x192.png"
+              alt="Project Brahmaputra"
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-contain shrink-0 shadow-xs ring-1 ring-slate-200/50"
+            />
               <div className="flex flex-col min-w-0">
                 <div className="flex items-center gap-1.5 sm:gap-2">
                   <span className="font-heading font-bold text-sm sm:text-base text-slate-900 leading-none tracking-tight truncate">
@@ -106,8 +108,8 @@ export default function UserLayout({ children }) {
         </div>
       </header>
 
-      {/* Main Content Area with Bottom Padding for Mobile Nav */}
-      <main className="w-full pt-[60px] sm:pt-[73px] pb-24 md:pb-8 bg-slate-100 flex-1 flex flex-col">
+      {/* Main Content Area */}
+      <main className="w-full pt-[56px] sm:pt-[73px] bg-[#F5F7FA] flex-1 min-h-0 flex flex-col">
         {children}
       </main>
 

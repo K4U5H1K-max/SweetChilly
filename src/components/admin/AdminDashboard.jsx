@@ -176,7 +176,7 @@ export default function AdminDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F5F7FA] text-[#0B1220] flex flex-col font-sans antialiased pb-24 lg:pb-8">
+    <div className={`min-h-screen min-h-[100dvh] bg-[#F5F7FA] text-[#0B1220] flex flex-col font-sans antialiased ${adminActiveTab === 'MAP' ? 'h-[100dvh] max-h-[100dvh] overflow-hidden lg:overflow-visible lg:h-auto pb-14 lg:pb-8' : 'pb-20 lg:pb-8'}`}>
       {/* Top Global Navigation Bar */}
       <Navbar
         onOpenReportModal={() => setIsReportModalOpen(true)}
@@ -204,7 +204,7 @@ export default function AdminDashboard() {
       )}
 
       {/* Main Content Area */}
-      <main className="w-full pt-[60px] sm:pt-[73px] flex-1">
+      <main className="w-full pt-[56px] sm:pt-[73px] flex-1 min-h-0 flex flex-col">
         {/* Desktop Screen Navigation Bar */}
         <section className="hidden lg:block w-full bg-white border-b border-slate-200 py-4 px-6 lg:px-8 shadow-xs">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -313,8 +313,9 @@ export default function AdminDashboard() {
                 />
               </div>
 
-              <div className="lg:col-span-4">
+              <div className="lg:col-span-4 h-full">
                 <AlertPanel
+                  maxHeightClass="max-h-[500px] lg:max-h-[520px]"
                   onSelectIncident={(id) => {
                     setSelectedIncidentId(id);
                     handleSelectTab('MAP');
@@ -330,19 +331,19 @@ export default function AdminDashboard() {
         {/* SCREEN 2: MAP (Dedicated Full-Screen GIS Intelligence) */}
         {/* ========================================================= */}
         {adminActiveTab === 'MAP' && (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 space-y-4 animate-fade-in">
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+          <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8 py-2 sm:py-5 space-y-2 sm:space-y-4 animate-fade-in w-full flex-1 min-h-0 flex flex-col">
+            <div className="hidden sm:flex bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-4 shadow-xs items-center justify-between shrink-0">
               <div>
-                <h2 className="text-base font-heading font-bold text-slate-900">
+                <h2 className="text-sm sm:text-base font-heading font-bold text-slate-900">
                   Spatial Operations & Corridor Telemetry
                 </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
+                <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
                   Interactive GIS map with layers for active deployments, road hazards, and corridor weather
                 </p>
               </div>
               <button
                 onClick={() => setIsRoutePlannerOpen(true)}
-                className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer"
+                className="px-3 sm:px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer touch-target sm:min-h-0 shrink-0"
               >
                 <IconRoute className="w-4 h-4" />
                 <span>Calculate Bypass</span>
@@ -351,6 +352,7 @@ export default function AdminDashboard() {
 
             <MapplsGISMap
               fullHeight={true}
+              className="flex-1 min-h-0"
               selectedIncidentId={selectedIncidentId}
               onSelectIncident={(id) => setSelectedIncidentId(id)}
               selectedVehicleId={selectedVehicleId}
@@ -368,7 +370,7 @@ export default function AdminDashboard() {
         {/* SCREEN 3: FLEET (Corridor Telemetry & Multi-Tenant Ledger) */}
         {/* ========================================================= */}
         {adminActiveTab === 'FLEET' && (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 animate-fade-in">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-5 animate-fade-in w-full">
             <CorridorTelemetryLedger
               selectedVehicleId={selectedVehicleId}
               onSelectVehicle={(id) => {
@@ -389,8 +391,9 @@ export default function AdminDashboard() {
         {/* SCREEN 4: ALERTS (Disruptions & Hazards List) */}
         {/* ========================================================= */}
         {adminActiveTab === 'ALERTS' && (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 animate-fade-in">
+          <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-5 animate-fade-in w-full flex-1 min-h-0 flex flex-col">
             <AlertPanel
+              className="flex-1 min-h-0"
               selectedIncidentId={selectedIncidentId}
               onSelectIncident={(id) => {
                 setSelectedIncidentId(id);

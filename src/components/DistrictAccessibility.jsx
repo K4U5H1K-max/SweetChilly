@@ -125,7 +125,7 @@ export default function DistrictAccessibility({ onSelectDistrict }) {
       </div>
 
       {/* DESKTOP VIEW: Analytical 6-Column Data Table (Hidden on Mobile) */}
-      <div className="hidden md:block overflow-x-auto max-h-[460px]">
+      <div className="hidden lg:block overflow-x-auto max-h-[540px]">
         <table className="w-full text-left text-xs border-collapse">
           <thead>
             <tr className="bg-slate-100/80 border-b border-slate-200 text-slate-700 text-xs font-semibold sticky top-0 z-10 backdrop-blur-xs">
@@ -181,9 +181,9 @@ export default function DistrictAccessibility({ onSelectDistrict }) {
       </div>
 
       {/* MOBILE ONLY VIEW: Stacked Operational District Cards */}
-      <div className="md:hidden divide-y divide-slate-100 max-h-[480px] overflow-y-auto">
+      <div className="lg:hidden p-3 space-y-3">
         {filteredDistricts.length === 0 ? (
-          <div className="p-8 text-center text-slate-400 text-xs font-medium">
+          <div className="p-8 text-center text-slate-400 text-xs font-medium bg-slate-50 rounded-xl">
             No districts match current filter criteria.
           </div>
         ) : (

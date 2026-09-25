@@ -355,12 +355,83 @@ app.post('/api/auth/logout', (req, res) => {
 });
 
 // Incidents Endpoints
-app.get('/api/incidents', (req, res) => {
-  res.json({
-    success: true,
-    count: incidents.length,
-    data: incidents,
-  });
+app.get('/api/incidents', optionalAuth, async (req, res) => {
+  try {
+    let filtered = [...incidents];
+    if (req.user && req.user.role === 'USER') {
+      // Collect vehicle IDs owned by this user
+      let userVehicleIds = new Set();
+      try {
+        const userVehicles = await vehicleRepository.getAllVehicles({ ownerUserId: req.user.id });
+        userVehicleIds = new Set(userVehicles.map((v) => String(v.id).toLowerCase()));
+      } catch (e) {
+        // Continue with empty set if lookup fails
+      }
+
+      filtered = incidents.filter((inc) => {
+        // 1. Public / regional operational warnings and verified incidents
+        const isVerified = inc.status === 'VERIFIED' || inc.verified === true;
+        if (isVerified) return true;
+
+        // 2. Incidents reported by this authenticated user
+        if (inc.reporterId && inc.reporterId === req.user.id) return true;
+
+        // 3. Incidents associated with this user's vehicles/deployments
+        if (inc.vehicleId && userVehicleIds.has(String(inc.vehicleId).toLowerCase())) return true;
+
+        // Never leak unverified private reports from other users
+        return false;
+      });
+    } else if (!req.user) {
+      // Unauthenticated / public callers only receive verified regional alerts
+      filtered = incidents.filter((inc) => inc.status === 'VERIFIED' || inc.verified === true);
+    }
+    // ADMIN role receives all operational incidents
+
+    res.json({
+      success: true,
+      count: filtered.length,
+      data: filtered,
+    });
+  } catch (err) {
+    console.error('[Incidents API] Error retrieving incidents:', err.message);
+    res.status(500).json({ success: false, message: 'Failed to retrieve incidents.' });
+  }
+});
+
+app.get('/api/incidents/:id', optionalAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const inc = incidents.find((i) => i.id.toLowerCase() === String(id).toLowerCase());
+    if (!inc) {
+      return res.status(404).json({ success: false, message: `Incident '${id}' not found.` });
+    }
+
+    if (req.user && req.user.role === 'USER') {
+      const isVerified = inc.status === 'VERIFIED' || inc.verified === true;
+      let isOwnVehicle = false;
+      if (inc.vehicleId) {
+        try {
+          const veh = await vehicleRepository.getVehicleById(inc.vehicleId);
+          isOwnVehicle = veh && veh.ownerUserId === req.user.id;
+        } catch (e) {}
+      }
+      const isOwner = inc.reporterId && inc.reporterId === req.user.id;
+      if (!isVerified && !isOwner && !isOwnVehicle) {
+        return res.status(404).json({ success: false, message: `Incident '${id}' not found.` });
+      }
+    } else if (!req.user) {
+      const isVerified = inc.status === 'VERIFIED' || inc.verified === true;
+      if (!isVerified) {
+        return res.status(404).json({ success: false, message: `Incident '${id}' not found.` });
+      }
+    }
+
+    res.json({ success: true, data: inc });
+  } catch (err) {
+    console.error('[Incidents API] Error retrieving incident:', err.message);
+    res.status(500).json({ success: false, message: 'Failed to retrieve incident.' });
+  }
 });
 
 // ==========================================
@@ -600,10 +671,24 @@ Respond ONLY with a JSON object in this exact schema (no surrounding markdown te
 
 // Incident Creation Endpoint
 app.post('/api/incidents', optionalAuth, (req, res) => {
-  const { title, location, district, severity, lat, lng, type, incidentType, description, affectedCorridor } = req.body;
+  const { title, location, district, severity, lat, lng, type, incidentType, description, affectedCorridor, vehicleId } = req.body;
   const reporterName = req.user ? req.user.fullName : (req.body.reportedBy || 'NER Logistics Operator');
   const reporterId = req.user ? req.user.id : null;
   const reporterRole = req.user ? req.user.role : 'PUBLIC';
+
+  let finalLat = null;
+  let finalLng = null;
+
+  if (lat !== undefined && lat !== null && !isNaN(Number(lat)) && lng !== undefined && lng !== null && !isNaN(Number(lng))) {
+    finalLat = parseFloat(lat);
+    finalLng = parseFloat(lng);
+  } else if (location || district) {
+    const resolved = resolveLocationCoordinates(location || district);
+    if (resolved) {
+      finalLat = resolved.lat;
+      finalLng = resolved.lng;
+    }
+  }
 
   const newInc = {
     id: `INC-NER-${Date.now().toString(36).toUpperCase()}`,
@@ -611,12 +696,13 @@ app.post('/api/incidents', optionalAuth, (req, res) => {
     location: location || 'NER Corridor',
     district: district || 'Unknown District',
     severity: severity || 'MEDIUM',
-    lat: parseFloat(lat) || 26.1445,
-    lng: parseFloat(lng) || 91.7362,
+    lat: finalLat,
+    lng: finalLng,
     type: incidentType || type || 'OBSTRUCTION',
     description: description || '',
     affectedCorridor: affectedCorridor || 'General Transit Arterial',
     verified: false,
+    vehicleId: vehicleId || null,
     reportedBy: reporterName,
     reporterId,
     reporterRole,

@@ -410,6 +410,8 @@ async function runPhase3BAcceptanceSuite() {
       id: 'VEH-NER-ACC-002',
       regNumber: 'AR-01-AC-2002',
       name: 'Arunachal Strategic Supply #02',
+      origin: 'Tezpur',
+      destination: 'Itanagar',
       driverPhone: '+91-94362-78901',
       driverName: 'T. Riba',
     });

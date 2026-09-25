@@ -64,6 +64,12 @@ export class VehicleRepository {
 
   /**
    * Projects active deployment state onto a vehicle object for backward compatibility.
+   * Enforces position-source hierarchy:
+   * 1. Real current telemetry (if genuine live telemetry coordinates exist)
+   * 2. Active deployment origin coordinates (initial position before telemetry)
+   * 3. Legitimate persisted vehicle/depot location
+   * 4. Unknown / null (No marker, never Guwahati fallback)
+   *
    * @param {object} vehicle
    * @returns {Promise<object>}
    */
@@ -76,15 +82,25 @@ export class VehicleRepository {
       }
       if (activeDep) {
         const originLat = activeDep.originLat !== null && activeDep.originLat !== undefined
-          ? activeDep.originLat
+          ? Number(activeDep.originLat)
           : (resolveLocationCoordinates(activeDep.origin)?.lat ?? null);
         const originLng = activeDep.originLng !== null && activeDep.originLng !== undefined
-          ? activeDep.originLng
+          ? Number(activeDep.originLng)
           : (resolveLocationCoordinates(activeDep.origin)?.lng ?? null);
 
-        const currentPos = (originLat !== null && originLng !== null)
-          ? { lat: originLat, lng: originLng }
-          : vehicle.currentPos;
+        let currentPos = null;
+        let locationSource = 'UNKNOWN';
+
+        if (vehicle.telemetryPos && vehicle.telemetryPos.lat !== null && vehicle.telemetryPos.lat !== undefined && vehicle.telemetryPos.lng !== null && vehicle.telemetryPos.lng !== undefined) {
+          currentPos = { lat: Number(vehicle.telemetryPos.lat), lng: Number(vehicle.telemetryPos.lng) };
+          locationSource = 'LIVE_TELEMETRY';
+        } else if (originLat !== null && originLng !== null && !isNaN(originLat) && !isNaN(originLng)) {
+          currentPos = { lat: originLat, lng: originLng };
+          locationSource = 'DEPLOYMENT_ORIGIN';
+        } else if (vehicle.currentPos && vehicle.currentPos.lat !== null && vehicle.currentPos.lat !== undefined && vehicle.currentPos.lng !== null && vehicle.currentPos.lng !== undefined && !isNaN(vehicle.currentPos.lat) && !isNaN(vehicle.currentPos.lng)) {
+          currentPos = { lat: Number(vehicle.currentPos.lat), lng: Number(vehicle.currentPos.lng) };
+          locationSource = 'VEHICLE_LOCATION';
+        }
 
         return {
           ...vehicle,
@@ -94,24 +110,40 @@ export class VehicleRepository {
           cargo: activeDep.cargo || vehicle.cargo,
           priority: activeDep.priority || vehicle.priority,
           currentPos,
+          locationSource,
           hasActiveDeployment: true,
           activeDeploymentId: activeDep.id,
           deploymentStatus: activeDep.status,
           originLat,
           originLng,
           destinationLat: activeDep.destinationLat !== null && activeDep.destinationLat !== undefined
-            ? activeDep.destinationLat
+            ? Number(activeDep.destinationLat)
             : (resolveLocationCoordinates(activeDep.destination)?.lat ?? null),
           destinationLng: activeDep.destinationLng !== null && activeDep.destinationLng !== undefined
-            ? activeDep.destinationLng
+            ? Number(activeDep.destinationLng)
             : (resolveLocationCoordinates(activeDep.destination)?.lng ?? null),
         };
       }
     } catch (err) {
       // Fallback gracefully without projection on error
     }
+    const hasLiveTelemetry = vehicle.telemetryPos && vehicle.telemetryPos.lat !== null && vehicle.telemetryPos.lat !== undefined && vehicle.telemetryPos.lng !== null && vehicle.telemetryPos.lng !== undefined && !isNaN(vehicle.telemetryPos.lat) && !isNaN(vehicle.telemetryPos.lng);
+    const hasValidPersisted = vehicle.currentPos && vehicle.currentPos.lat !== null && vehicle.currentPos.lng !== null && !isNaN(vehicle.currentPos.lat) && !isNaN(vehicle.currentPos.lng);
+
+    let finalPos = null;
+    let locationSource = 'UNKNOWN';
+    if (hasLiveTelemetry) {
+      finalPos = { lat: Number(vehicle.telemetryPos.lat), lng: Number(vehicle.telemetryPos.lng) };
+      locationSource = 'LIVE_TELEMETRY';
+    } else if (hasValidPersisted) {
+      finalPos = vehicle.currentPos;
+      locationSource = 'VEHICLE_LOCATION';
+    }
+
     return {
       ...vehicle,
+      currentPos: finalPos,
+      locationSource,
       hasActiveDeployment: false,
       activeDeploymentId: null,
       deploymentStatus: 'AVAILABLE',
@@ -162,6 +194,7 @@ export class VehicleRepository {
    */
   mapRowToVehicle(row) {
     if (!row) return null;
+    const hasValidCoords = row.lat !== undefined && row.lat !== null && row.lng !== undefined && row.lng !== null && !isNaN(Number(row.lat)) && !isNaN(Number(row.lng));
     return {
       id: row.id,
       ownerUserId: row.owner_user_id || null,
@@ -175,10 +208,10 @@ export class VehicleRepository {
       speedKmH: Number(row.speed_km_h || 0),
       origin: row.origin,
       destination: row.destination,
-      currentPos: {
-        lat: Number(row.lat !== undefined && row.lat !== null ? row.lat : 26.1445),
-        lng: Number(row.lng !== undefined && row.lng !== null ? row.lng : 91.7362),
-      },
+      currentPos: hasValidCoords ? {
+        lat: Number(row.lat),
+        lng: Number(row.lng),
+      } : null,
       assignedCorridor: row.assigned_corridor,
       delayEstMinutes: Number(row.delay_est_minutes || 0),
       priority: row.priority,
@@ -286,16 +319,16 @@ export class VehicleRepository {
     const rawOrigin = v.origin || (v.currentLocationName ? v.currentLocationName.replace(/\s+Logistics\s+Hub|\s+Hub/i, '').trim() : null);
     const resolvedOriginCoords = resolveLocationCoordinates(rawOrigin || v.currentLocationName);
 
-    const lat = v.currentPos?.lat !== undefined
-      ? v.currentPos.lat
-      : (v.currentLocationLat !== undefined
-          ? v.currentLocationLat
-          : (v.latitude !== undefined ? v.latitude : (resolvedOriginCoords?.lat ?? 26.1445)));
-    const lng = v.currentPos?.lng !== undefined
-      ? v.currentPos.lng
-      : (v.currentLocationLng !== undefined
-          ? v.currentLocationLng
-          : (v.longitude !== undefined ? v.longitude : (resolvedOriginCoords?.lng ?? 91.7362)));
+    const lat = v.currentPos?.lat !== undefined && v.currentPos?.lat !== null
+      ? Number(v.currentPos.lat)
+      : (v.currentLocationLat !== undefined && v.currentLocationLat !== null
+          ? Number(v.currentLocationLat)
+          : (v.latitude !== undefined && v.latitude !== null ? Number(v.latitude) : (resolvedOriginCoords?.lat ?? null)));
+    const lng = v.currentPos?.lng !== undefined && v.currentPos?.lng !== null
+      ? Number(v.currentPos.lng)
+      : (v.currentLocationLng !== undefined && v.currentLocationLng !== null
+          ? Number(v.currentLocationLng)
+          : (v.longitude !== undefined && v.longitude !== null ? Number(v.longitude) : (resolvedOriginCoords?.lng ?? null)));
 
     const vehicleId = v.id || `VEH-NER-${Date.now().toString(36).toUpperCase()}`;
     const ownerUserId = v.ownerUserId || null;
@@ -378,7 +411,7 @@ export class VehicleRepository {
       speedKmH,
       origin,
       destination,
-      currentPos: { lat: Number(lat), lng: Number(lng) },
+      currentPos: (lat !== null && lng !== null && !isNaN(Number(lat)) && !isNaN(Number(lng))) ? { lat: Number(lat), lng: Number(lng) } : null,
       assignedCorridor,
       delayEstMinutes,
       priority,

@@ -152,92 +152,96 @@ export default function CorridorTelemetryLedger({
       }
       setActionConfirm(null);
     } catch (err) {
-      console.warn('[CorridorTelemetryLedger] Action failed:', err.message);
+      console.error('Error updating deployment:', err);
     } finally {
       setActionLoading(false);
     }
   };
 
   return (
-    <div className="w-full bg-white rounded-xl border border-slate-200/90 shadow-xs flex flex-col overflow-hidden font-sans" id="corridors">
-      {/* Section Header & Tab Controls */}
-      <div className="border-b border-slate-100 bg-slate-900 text-white p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-blue-400"></span>
-            <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">
-              Fleet & Corridor Command Center
-            </span>
+    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-card flex flex-col font-sans w-full overflow-hidden">
+      {/* ========================================================
+          TOP HEADER: TITLE, DESKTOP ACTIONS, TAB STRIP
+      ======================================================== */}
+      <div className="border-b border-slate-100 bg-[#0B1220] text-white p-3.5 sm:p-4 flex flex-col gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="w-2 h-2 rounded-full bg-blue-500 inline-block animate-pulse shrink-0"></span>
+            <div className="min-w-0">
+              <h3 className="font-heading font-bold text-sm sm:text-base text-white tracking-tight leading-tight truncate">
+                NER Arterial Highway Telemetry & Fleet Ledger
+              </h3>
+              <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5 truncate">
+                Real-time transport movements, cargo tracking, and vehicle status across 8 NE States
+              </p>
+            </div>
           </div>
-          <h3 className="font-heading font-bold text-base text-white mt-0.5">
-            Logistics Asset Manifest, Active Deployments & Corridor Telemetry
-          </h3>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {onOpenDeployModal && (
+              <button
+                onClick={() => onOpenDeployModal(null)}
+                className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer touch-target sm:min-h-0"
+              >
+                <span>⚡</span>
+                <span>Deploy Vehicle</span>
+              </button>
+            )}
+
+            {onOpenAddVehicle && (
+              <button
+                onClick={onOpenAddVehicle}
+                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-semibold text-xs transition-colors border border-slate-700 flex items-center gap-1 cursor-pointer touch-target sm:min-h-0"
+              >
+                <span>+</span>
+                <span>Register Vehicle</span>
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Tab & Action Buttons */}
-        <div className="flex flex-wrap items-center gap-2">
-          {onOpenDeployModal && (
-            <button
-              onClick={() => onOpenDeployModal(null)}
-              className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer touch-target sm:min-h-0"
-            >
-              <span>⚡</span>
-              <span>Deploy Vehicle</span>
-            </button>
-          )}
-
-          {onOpenAddVehicle && (
-            <button
-              onClick={onOpenAddVehicle}
-              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-semibold text-xs transition-colors border border-slate-700 flex items-center gap-1 cursor-pointer touch-target sm:min-h-0"
-            >
-              <span>+</span>
-              <span>Register Vehicle</span>
-            </button>
-          )}
-
-          <div className="bg-slate-800 p-0.5 rounded-lg border border-slate-700 flex items-center gap-1 text-xs overflow-x-auto max-w-full">
-            <button
-              onClick={() => { setActiveTab('fleet'); setStatusFilter('ALL'); }}
-              className={`px-3 py-1.5 rounded-md font-semibold transition-all whitespace-nowrap cursor-pointer touch-target sm:min-h-0 ${
-                activeTab === 'fleet'
-                  ? 'bg-white text-slate-900 shadow-xs'
-                  : 'text-slate-300 hover:text-white'
-              }`}
-            >
-              Fleet Directory ({vehicles.length})
-            </button>
-            <button
-              onClick={() => { setActiveTab('deployments'); setStatusFilter('ALL'); }}
-              className={`px-3 py-1.5 rounded-md font-semibold transition-all whitespace-nowrap cursor-pointer touch-target sm:min-h-0 ${
-                activeTab === 'deployments'
-                  ? 'bg-white text-slate-900 shadow-xs'
-                  : 'text-slate-300 hover:text-white'
-              }`}
-            >
-              Active Deployments ({activeDeployments.length})
-            </button>
-            <button
-              onClick={() => { setActiveTab('history'); setStatusFilter('ALL'); }}
-              className={`px-3 py-1.5 rounded-md font-semibold transition-all whitespace-nowrap cursor-pointer touch-target sm:min-h-0 ${
-                activeTab === 'history'
-                  ? 'bg-white text-slate-900 shadow-xs'
-                  : 'text-slate-300 hover:text-white'
-              }`}
-            >
-              History ({deploymentHistory.length})
-            </button>
-            <button
-              onClick={() => { setActiveTab('corridors'); setStatusFilter('ALL'); }}
-              className={`px-3 py-1.5 rounded-md font-semibold transition-all whitespace-nowrap cursor-pointer touch-target sm:min-h-0 ${
-                activeTab === 'corridors'
-                  ? 'bg-white text-slate-900 shadow-xs'
-                  : 'text-slate-300 hover:text-white'
-              }`}
-            >
-              Corridors ({corridors.length})
-            </button>
-          </div>
+        {/* Scrollable Segmented Tab Strip */}
+        <div className="bg-slate-800/90 p-1 rounded-xl border border-slate-700 flex items-center gap-1 text-xs overflow-x-auto max-w-full pb-1 sm:pb-1">
+          <button
+            onClick={() => { setActiveTab('fleet'); setStatusFilter('ALL'); }}
+            className={`px-3 py-1.5 rounded-lg font-semibold transition-all whitespace-nowrap cursor-pointer touch-target sm:min-h-0 shrink-0 ${
+              activeTab === 'fleet'
+                ? 'bg-white text-slate-900 shadow-xs font-bold'
+                : 'text-slate-300 hover:text-white'
+            }`}
+          >
+            Fleet Directory ({vehicles.length})
+          </button>
+          <button
+            onClick={() => { setActiveTab('deployments'); setStatusFilter('ALL'); }}
+            className={`px-3 py-1.5 rounded-lg font-semibold transition-all whitespace-nowrap cursor-pointer touch-target sm:min-h-0 shrink-0 ${
+              activeTab === 'deployments'
+                ? 'bg-white text-slate-900 shadow-xs font-bold'
+                : 'text-slate-300 hover:text-white'
+            }`}
+          >
+            Active Deployments ({activeDeployments.length})
+          </button>
+          <button
+            onClick={() => { setActiveTab('history'); setStatusFilter('ALL'); }}
+            className={`px-3 py-1.5 rounded-lg font-semibold transition-all whitespace-nowrap cursor-pointer touch-target sm:min-h-0 shrink-0 ${
+              activeTab === 'history'
+                ? 'bg-white text-slate-900 shadow-xs font-bold'
+                : 'text-slate-300 hover:text-white'
+            }`}
+          >
+            History ({deploymentHistory.length})
+          </button>
+          <button
+            onClick={() => { setActiveTab('corridors'); setStatusFilter('ALL'); }}
+            className={`px-3 py-1.5 rounded-lg font-semibold transition-all whitespace-nowrap cursor-pointer touch-target sm:min-h-0 shrink-0 ${
+              activeTab === 'corridors'
+                ? 'bg-white text-slate-900 shadow-xs font-bold'
+                : 'text-slate-300 hover:text-white'
+            }`}
+          >
+            Corridors ({corridors.length})
+          </button>
         </div>
       </div>
 
@@ -245,10 +249,11 @@ export default function CorridorTelemetryLedger({
           TAB 1: FLEET DIRECTORY & ASSET AVAILABILITY
       ======================================================== */}
       {activeTab === 'fleet' && (
-        <div className="flex flex-col">
+        <div className="flex flex-col w-full">
           {/* Sub-toolbar: Filters & Search */}
-          <div className="border-b border-slate-200/80 bg-slate-50/70 p-3 flex flex-wrap items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-1.5 overflow-x-auto max-w-full pb-0.5">
+          <div className="border-b border-slate-200/80 bg-slate-50/70 p-3 sm:p-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 text-xs">
+            {/* Filter Chips Horizontal Strip */}
+            <div className="flex items-center gap-1.5 overflow-x-auto max-w-full pb-1 sm:pb-0">
               <span className="text-slate-500 font-semibold text-xs mr-1 shrink-0">Filter:</span>
               {[
                 { id: 'ALL', label: `All (${vehicles.length})` },
@@ -259,7 +264,7 @@ export default function CorridorTelemetryLedger({
                 <button
                   key={f.id}
                   onClick={() => setStatusFilter(f.id)}
-                  className={`px-2.5 py-1 rounded-md transition-all font-medium whitespace-nowrap cursor-pointer touch-target sm:min-h-0 ${
+                  className={`px-2.5 py-1.5 rounded-lg transition-all font-semibold whitespace-nowrap cursor-pointer touch-target sm:min-h-0 shrink-0 ${
                     statusFilter === f.id
                       ? 'bg-slate-900 text-white font-bold shadow-xs'
                       : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
@@ -270,25 +275,28 @@ export default function CorridorTelemetryLedger({
               ))}
             </div>
 
-            {/* Search Box */}
-            <div className="flex items-center gap-2 w-full sm:w-auto">
+            {/* Search Box - Full Width on Mobile */}
+            <div className="w-full sm:w-72 relative">
               <input
                 type="text"
                 placeholder="Search asset, cargo, driver, reg..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full sm:w-auto px-3 py-1 rounded-md bg-white border border-slate-300 text-xs text-slate-800 focus:outline-hidden focus:border-slate-500 shadow-2xs"
+                className="w-full pl-3.5 pr-8 py-2 rounded-xl bg-white border border-slate-300 text-xs text-slate-800 focus:outline-hidden focus:border-blue-600 focus:ring-1 focus:ring-blue-600 shadow-2xs"
               />
               {searchQuery && (
-                <button onClick={() => setSearchQuery('')} className="text-slate-400 hover:text-slate-700 text-xs cursor-pointer">
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-700 text-xs cursor-pointer p-0.5"
+                >
                   ✕
                 </button>
               )}
             </div>
           </div>
 
-          {/* DESKTOP VIEW: Fleet Table */}
-          <div className="hidden md:block overflow-x-auto max-h-[480px]">
+          {/* DESKTOP VIEW: Fleet Multi-Column Table (Hidden on Mobile) */}
+          <div className="hidden lg:block overflow-x-auto max-h-[540px]">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-slate-100/80 border-b border-slate-200 text-slate-700 text-xs font-semibold sticky top-0 z-10 backdrop-blur-xs">
@@ -458,74 +466,148 @@ export default function CorridorTelemetryLedger({
             </table>
           </div>
 
-          {/* MOBILE ONLY VIEW: Fleet Stacked Cards */}
-          <div className="md:hidden divide-y divide-slate-100 max-h-[480px] overflow-y-auto">
+          {/* MOBILE ONLY VIEW: Responsive Stacked Vehicle Cards (Visible on < lg) */}
+          <div className="lg:hidden p-3 space-y-3">
             {filteredVehicles.length === 0 ? (
-              <div className="p-8 text-center text-slate-400 text-xs font-medium">
+              <div className="p-8 text-center text-slate-400 text-xs font-medium bg-slate-50 rounded-xl">
                 No vehicles match current filter criteria.
               </div>
             ) : (
               filteredVehicles.map((v) => {
                 const isAvailable = v.deploymentStatus === 'AVAILABLE' || !v.hasActiveDeployment;
                 const depStatus = v.deploymentStatus || (isAvailable ? 'AVAILABLE' : 'ACTIVE');
+                const isSelected = selectedVehicleId === v.id;
 
                 return (
-                  <div key={v.id} className="p-3.5 hover:bg-slate-50 transition-colors">
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <div>
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-mono font-bold text-xs text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                            {v.id}
+                  <div
+                    key={v.id}
+                    className={`bg-white rounded-2xl border p-4 shadow-card transition-all flex flex-col gap-3 ${
+                      v.isFlagged
+                        ? 'border-amber-300 ring-2 ring-amber-400/20 bg-amber-50/20'
+                        : isSelected
+                        ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/30'
+                        : 'border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    {/* 1. Header Row: ID, Badges, Status */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-wrap min-w-0">
+                        <span className="font-mono font-bold text-xs text-slate-900 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+                          {v.id}
+                        </span>
+                        {v.owner ? (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                            Operator: {v.owner.fullName}
                           </span>
-                          <span className="text-xs font-bold text-slate-800">{v.name}</span>
-                        </div>
-                        <div className="text-[11px] text-slate-500 mt-0.5">
-                          {v.owner ? `Operator: ${v.owner.fullName}` : 'State Fleet'} • {v.type} ({v.capacity || '5T'})
-                        </div>
-                      </div>
-                      <span className={`px-2 py-0.5 rounded text-[10px] uppercase border font-bold shrink-0 ${getDeploymentStatusBadge(depStatus)}`}>
-                        {depStatus}
-                      </span>
-                    </div>
-
-                    <div className="bg-slate-50 p-2 rounded-lg text-[11px] text-slate-600 mb-2 space-y-1">
-                      <div className="flex justify-between">
-                        <span>Driver: <strong className="text-slate-800">{v.driverName || 'Operator'}</strong></span>
-                        <span className="font-mono text-slate-500">{v.regNumber}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Route: <strong className="text-slate-800">{isAvailable ? `Idle at ${v.origin || 'Depot'}` : `${v.origin} → ${v.destination}`}</strong></span>
-                        <span className="font-mono">{v.speedKmH || 0} km/h</span>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap items-center justify-between gap-1.5 pt-1 border-t border-slate-100 text-xs">
-                      <span className={`px-2 py-0.5 rounded text-[10px] uppercase border ${getSafetyBadge(v.safetyStatus, v.isFlagged)}`}>
-                        {(v.safetyStatus || 'NOT_CHECKED').replace('_', ' ')}
-                      </span>
-
-                      <div className="flex items-center gap-1.5">
-                        {isAvailable && onOpenDeployModal && (
-                          <button
-                            onClick={() => onOpenDeployModal(v.id)}
-                            className="px-2.5 py-1 rounded-md bg-blue-600 text-white font-bold text-xs touch-target sm:min-h-0"
-                          >
-                            ⚡ Deploy
-                          </button>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                            State Fleet
+                          </span>
                         )}
-                        <button
-                          onClick={() => onOpenSafetyModal && onOpenSafetyModal(v.id)}
-                          className="px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 font-semibold text-xs touch-target sm:min-h-0"
-                        >
-                          Safety
-                        </button>
-                        <button
-                          onClick={() => onSelectVehicle && onSelectVehicle(v.id)}
-                          className="px-2.5 py-1 rounded-md bg-slate-900 text-white font-semibold text-xs touch-target sm:min-h-0"
-                        >
-                          Track
-                        </button>
+                        {v.isFlagged && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                            🚩 Flagged
+                          </span>
+                        )}
                       </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className={`px-2 py-0.5 rounded-md text-[10px] uppercase font-bold border ${getDeploymentStatusBadge(depStatus)}`}>
+                          {depStatus}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* 2. Vehicle Name / Title */}
+                    <div>
+                      <h4 className="font-heading font-bold text-sm text-slate-900 leading-snug">
+                        {v.name}
+                      </h4>
+                    </div>
+
+                    {/* 3. Structured Key-Value Details Grid */}
+                    <div className="bg-slate-50/90 rounded-xl p-3 border border-slate-100 text-xs space-y-2">
+                      {/* Driver Row */}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-slate-500 text-[11px]">Driver & Contact:</span>
+                        <div className="text-right min-w-0">
+                          <span className="font-bold text-slate-900 block truncate">{v.driverName || 'Operator'}</span>
+                          <span className="font-mono text-[11px] text-slate-500 block">{v.regNumber || 'No Reg'}</span>
+                        </div>
+                      </div>
+
+                      {/* Vehicle Type & Capacity Row */}
+                      <div className="flex items-center justify-between gap-2 border-t border-slate-200/50 pt-1.5">
+                        <span className="text-slate-500 text-[11px]">Type & Capacity:</span>
+                        <div className="text-right min-w-0">
+                          <span className="font-semibold text-slate-800">{v.type}</span>
+                          <span className="text-slate-500 text-[11px] font-mono ml-1">({v.capacity || '5 Ton'})</span>
+                        </div>
+                      </div>
+
+                      {/* Route & Telemetry Row */}
+                      <div className="flex items-center justify-between gap-2 border-t border-slate-200/50 pt-1.5">
+                        <span className="text-slate-500 text-[11px]">Route / Base:</span>
+                        <div className="text-right min-w-0">
+                          {isAvailable ? (
+                            <span className="text-slate-600 italic">Idle at {v.origin || 'Regional Base'}</span>
+                          ) : (
+                            <span className="font-bold text-slate-900">{v.origin} → {v.destination}</span>
+                          )}
+                          <span className="font-mono text-[11px] text-slate-500 block">
+                            {v.speedKmH || 0} km/h {v.delayEstMinutes > 0 && <span className="text-rose-600 font-bold ml-1">+{v.delayEstMinutes}m delay</span>}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Safety Status (Track 4) Row */}
+                      <div className="flex items-center justify-between gap-2 border-t border-slate-200/50 pt-1.5">
+                        <span className="text-slate-500 text-[11px]">Safety Status:</span>
+                        <span className={`px-2 py-0.5 rounded text-[10px] uppercase border ${getSafetyBadge(v.safetyStatus, v.isFlagged)}`}>
+                          {(v.safetyStatus || 'NOT_CHECKED').replace('_', ' ')}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* 4. Touch-Friendly Action Buttons */}
+                    <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
+                      {isAvailable && onOpenDeployModal && (
+                        <button
+                          onClick={() => onOpenDeployModal(v.id)}
+                          className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs transition-colors flex items-center gap-1 cursor-pointer touch-target sm:min-h-0"
+                        >
+                          <span>⚡</span>
+                          <span>Deploy</span>
+                        </button>
+                      )}
+
+                      {onOpenVehicleHistory && (
+                        <button
+                          onClick={() => onOpenVehicleHistory(v.id)}
+                          className="px-3 py-1.5 rounded-xl bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-semibold text-xs transition-colors shadow-2xs cursor-pointer touch-target sm:min-h-0"
+                        >
+                          History
+                        </button>
+                      )}
+
+                      <button
+                        onClick={() => onOpenSafetyModal && onOpenSafetyModal(v.id)}
+                        className={`px-3 py-1.5 rounded-xl font-bold text-xs transition-colors shadow-2xs flex items-center gap-1 cursor-pointer touch-target sm:min-h-0 ${
+                          v.isFlagged
+                            ? 'bg-amber-600 text-white animate-pulse'
+                            : 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100'
+                        }`}
+                      >
+                        <span>📞</span>
+                        <span>Safety</span>
+                      </button>
+
+                      <button
+                        onClick={() => onSelectVehicle && onSelectVehicle(v.id)}
+                        className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-blue-700 text-white font-bold text-xs transition-colors shadow-2xs cursor-pointer touch-target sm:min-h-0"
+                      >
+                        Track
+                      </button>
                     </div>
                   </div>
                 );
@@ -536,12 +618,12 @@ export default function CorridorTelemetryLedger({
       )}
 
       {/* ========================================================
-          TAB 2: ACTIVE DEPLOYMENTS TABLE
+          TAB 2: ACTIVE DEPLOYMENTS
       ======================================================== */}
       {activeTab === 'deployments' && (
-        <div className="flex flex-col">
+        <div className="flex flex-col w-full">
           {/* Sub-toolbar */}
-          <div className="border-b border-slate-200/80 bg-slate-50/70 p-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="border-b border-slate-200/80 bg-slate-50/70 p-3 sm:p-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2">
               <span className="font-bold text-slate-800 text-xs">
                 Active Corridor Deployments ({activeDeployments.length})
@@ -552,24 +634,27 @@ export default function CorridorTelemetryLedger({
               </span>
             </div>
 
-            <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="w-full sm:w-72 relative">
               <input
                 type="text"
-                placeholder="Search active deployment, corridor, cargo..."
+                placeholder="Search deployment, corridor, cargo..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full sm:w-auto px-3 py-1 rounded-md bg-white border border-slate-300 text-xs text-slate-800 focus:outline-hidden focus:border-slate-500 shadow-2xs"
+                className="w-full pl-3.5 pr-8 py-2 rounded-xl bg-white border border-slate-300 text-xs text-slate-800 focus:outline-hidden focus:border-blue-600 focus:ring-1 focus:ring-blue-600 shadow-2xs"
               />
               {searchQuery && (
-                <button onClick={() => setSearchQuery('')} className="text-slate-400 hover:text-slate-700 text-xs cursor-pointer">
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-700 text-xs cursor-pointer p-0.5"
+                >
                   ✕
                 </button>
               )}
             </div>
           </div>
 
-          {/* DESKTOP VIEW: Active Deployments Table */}
-          <div className="hidden md:block overflow-x-auto max-h-[480px]">
+          {/* DESKTOP VIEW: Table */}
+          <div className="hidden lg:block overflow-x-auto max-h-[540px]">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-slate-100/80 border-b border-slate-200 text-slate-700 text-xs font-semibold sticky top-0 z-10 backdrop-blur-xs">
@@ -698,17 +783,17 @@ export default function CorridorTelemetryLedger({
           </div>
 
           {/* MOBILE ONLY VIEW: Active Deployment Stacked Cards */}
-          <div className="md:hidden divide-y divide-slate-100 max-h-[480px] overflow-y-auto">
+          <div className="lg:hidden p-3 space-y-3">
             {filteredActiveDeployments.length === 0 ? (
-              <div className="p-8 text-center text-slate-400 text-xs font-medium">
+              <div className="p-8 text-center text-slate-400 text-xs font-medium bg-slate-50 rounded-xl">
                 No active journeys on corridors.
               </div>
             ) : (
               filteredActiveDeployments.map((d) => {
                 const isConfirming = actionConfirm && actionConfirm.depId === d.id;
                 return (
-                  <div key={d.id} className="p-3.5 hover:bg-slate-50 transition-colors">
-                    <div className="flex items-start justify-between gap-2 mb-2">
+                  <div key={d.id} className="bg-white rounded-2xl border border-slate-200 p-4 shadow-card flex flex-col gap-3">
+                    <div className="flex items-start justify-between gap-2">
                       <div>
                         <div className="flex items-center gap-1.5">
                           <span className="font-mono font-bold text-xs text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
@@ -716,34 +801,44 @@ export default function CorridorTelemetryLedger({
                           </span>
                           <span className="font-mono text-[11px] text-slate-400">{d.id}</span>
                         </div>
-                        <div className="font-bold text-sm text-slate-900 mt-1">
+                        <h4 className="font-bold text-sm text-slate-900 mt-1">
                           {d.origin} → {d.destination}
-                        </div>
+                        </h4>
                       </div>
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase shrink-0 ${getDeploymentStatusBadge(d.status)}`}>
+                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border uppercase shrink-0 ${getDeploymentStatusBadge(d.status)}`}>
                         {d.status}
                       </span>
                     </div>
 
-                    <div className="bg-slate-50 p-2 rounded-lg text-[11px] text-slate-600 mb-2 space-y-1">
-                      <div>Corridor: <strong className="text-slate-800">{d.assignedCorridor}</strong></div>
-                      <div>Cargo: <strong className="text-slate-800">{d.cargo}</strong></div>
+                    <div className="bg-slate-50/90 rounded-xl p-3 border border-slate-100 text-xs space-y-1.5">
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Corridor:</span>
+                        <strong className="text-slate-800">{d.assignedCorridor}</strong>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Cargo:</span>
+                        <strong className="text-slate-800">{d.cargo}</strong>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Priority:</span>
+                        <span className="font-mono font-semibold text-slate-700">{d.priority}</span>
+                      </div>
                     </div>
 
                     {isConfirming ? (
-                      <div className="flex items-center justify-between gap-2 bg-slate-100 p-2 rounded-lg text-xs">
+                      <div className="flex items-center justify-between gap-2 bg-slate-100 p-2.5 rounded-xl text-xs">
                         <span className="font-bold text-slate-800">Confirm {actionConfirm.type}?</span>
                         <div className="flex items-center gap-1.5">
                           <button
                             onClick={() => handleExecuteAction(actionConfirm.type, d.id)}
                             disabled={actionLoading}
-                            className="px-3 py-1 bg-slate-900 text-white font-bold rounded text-xs cursor-pointer"
+                            className="px-3 py-1 bg-slate-900 text-white font-bold rounded-lg text-xs cursor-pointer"
                           >
                             {actionLoading ? '...' : 'Yes'}
                           </button>
                           <button
                             onClick={() => setActionConfirm(null)}
-                            className="px-3 py-1 bg-slate-200 text-slate-700 rounded text-xs cursor-pointer"
+                            className="px-3 py-1 bg-slate-200 text-slate-700 rounded-lg text-xs cursor-pointer"
                           >
                             No
                           </button>
@@ -754,7 +849,7 @@ export default function CorridorTelemetryLedger({
                         {onOpenDeploymentDetails && (
                           <button
                             onClick={() => onOpenDeploymentDetails(d.id)}
-                            className="px-2.5 py-1 bg-slate-100 text-slate-700 font-bold text-xs rounded-lg cursor-pointer touch-target sm:min-h-0"
+                            className="px-3 py-1.5 bg-slate-100 text-slate-700 font-bold text-xs rounded-xl cursor-pointer touch-target sm:min-h-0"
                           >
                             Inspect
                           </button>
@@ -762,13 +857,13 @@ export default function CorridorTelemetryLedger({
                         <div className="flex items-center gap-1.5 ml-auto">
                           <button
                             onClick={() => setActionConfirm({ type: 'COMPLETE', depId: d.id })}
-                            className="px-3 py-1 bg-emerald-600 text-white font-bold text-xs rounded-lg cursor-pointer touch-target sm:min-h-0"
+                            className="px-3.5 py-1.5 bg-emerald-600 text-white font-bold text-xs rounded-xl cursor-pointer touch-target sm:min-h-0"
                           >
                             Complete
                           </button>
                           <button
                             onClick={() => setActionConfirm({ type: 'CANCEL', depId: d.id })}
-                            className="px-2.5 py-1 border border-rose-300 text-rose-700 font-semibold text-xs rounded-lg cursor-pointer touch-target sm:min-h-0"
+                            className="px-3 py-1.5 border border-rose-300 text-rose-700 font-semibold text-xs rounded-xl cursor-pointer touch-target sm:min-h-0"
                           >
                             Cancel
                           </button>
@@ -784,40 +879,39 @@ export default function CorridorTelemetryLedger({
       )}
 
       {/* ========================================================
-          TAB 3: DEPLOYMENT HISTORY TABLE
+          TAB 3: DEPLOYMENT HISTORY
       ======================================================== */}
       {activeTab === 'history' && (
-        <div className="flex flex-col">
+        <div className="flex flex-col w-full">
           {/* Sub-toolbar */}
-          <div className="border-b border-slate-200/80 bg-slate-50/70 p-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="border-b border-slate-200/80 bg-slate-50/70 p-3 sm:p-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2">
               <span className="font-bold text-slate-800 text-xs">
                 Permanent Deployment Journey History ({deploymentHistory.length})
               </span>
-              <span className="text-slate-400">•</span>
-              <span className="text-slate-500 text-[11px] hidden sm:inline">
-                Preserved historical record across vehicle lifecycles
-              </span>
             </div>
 
-            <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="w-full sm:w-72 relative">
               <input
                 type="text"
                 placeholder="Search history by ID, vehicle, route..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full sm:w-auto px-3 py-1 rounded-md bg-white border border-slate-300 text-xs text-slate-800 focus:outline-hidden focus:border-slate-500 shadow-2xs"
+                className="w-full pl-3.5 pr-8 py-2 rounded-xl bg-white border border-slate-300 text-xs text-slate-800 focus:outline-hidden focus:border-blue-600 focus:ring-1 focus:ring-blue-600 shadow-2xs"
               />
               {searchQuery && (
-                <button onClick={() => setSearchQuery('')} className="text-slate-400 hover:text-slate-700 text-xs cursor-pointer">
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-700 text-xs cursor-pointer p-0.5"
+                >
                   ✕
                 </button>
               )}
             </div>
           </div>
 
-          {/* DESKTOP VIEW: Deployment History Table */}
-          <div className="hidden md:block overflow-x-auto max-h-[480px]">
+          {/* DESKTOP VIEW: Table */}
+          <div className="hidden lg:block overflow-x-auto max-h-[540px]">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-slate-100/80 border-b border-slate-200 text-slate-700 text-xs font-semibold sticky top-0 z-10 backdrop-blur-xs">
@@ -883,15 +977,15 @@ export default function CorridorTelemetryLedger({
           </div>
 
           {/* MOBILE ONLY VIEW: History Stacked Cards */}
-          <div className="md:hidden divide-y divide-slate-100 max-h-[480px] overflow-y-auto">
+          <div className="lg:hidden p-3 space-y-3">
             {filteredHistoryDeployments.length === 0 ? (
-              <div className="p-8 text-center text-slate-400 text-xs font-medium">
+              <div className="p-8 text-center text-slate-400 text-xs font-medium bg-slate-50 rounded-xl">
                 No past deployments on record.
               </div>
             ) : (
               filteredHistoryDeployments.map((d) => (
-                <div key={d.id} className="p-3.5 hover:bg-slate-50 transition-colors">
-                  <div className="flex items-start justify-between gap-2 mb-1.5">
+                <div key={d.id} className="bg-white rounded-2xl border border-slate-200 p-4 shadow-card flex flex-col gap-2.5">
+                  <div className="flex items-start justify-between gap-2">
                     <div>
                       <div className="flex items-center gap-1.5">
                         <span className="font-mono font-bold text-xs text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
@@ -899,25 +993,32 @@ export default function CorridorTelemetryLedger({
                         </span>
                         <span className="font-mono text-[11px] text-slate-400">{d.id}</span>
                       </div>
-                      <div className="font-bold text-sm text-slate-900 mt-1">
+                      <h4 className="font-bold text-sm text-slate-900 mt-1">
                         {d.origin} → {d.destination}
-                      </div>
+                      </h4>
                     </div>
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase shrink-0 ${getDeploymentStatusBadge(d.status)}`}>
+                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border uppercase shrink-0 ${getDeploymentStatusBadge(d.status)}`}>
                       {d.status}
                     </span>
                   </div>
 
-                  <div className="text-[11px] text-slate-500 mb-2">
-                    Corridor: <strong>{d.assignedCorridor}</strong> • Cargo: {d.cargo}
+                  <div className="bg-slate-50/90 rounded-xl p-3 border border-slate-100 text-xs space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Corridor:</span>
+                      <strong className="text-slate-800">{d.assignedCorridor}</strong>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Cargo:</span>
+                      <strong className="text-slate-800">{d.cargo}</strong>
+                    </div>
                   </div>
 
                   {onOpenDeploymentDetails && (
                     <button
                       onClick={() => onOpenDeploymentDetails(d.id)}
-                      className="w-full py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition-colors cursor-pointer text-center touch-target sm:min-h-0"
+                      className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer text-center touch-target sm:min-h-0"
                     >
-                      Audit Details
+                      Audit Journey Details
                     </button>
                   )}
                 </div>
@@ -931,9 +1032,9 @@ export default function CorridorTelemetryLedger({
           TAB 4: ARTERIAL HIGHWAY CORRIDORS & WEATHER
       ======================================================== */}
       {activeTab === 'corridors' && (
-        <div className="flex flex-col">
+        <div className="flex flex-col w-full">
           {/* DESKTOP VIEW: Corridors Table */}
-          <div className="hidden md:block overflow-x-auto max-h-[480px]">
+          <div className="hidden lg:block overflow-x-auto max-h-[540px]">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-slate-100/80 border-b border-slate-200 text-slate-700 text-xs font-semibold sticky top-0 z-10 backdrop-blur-xs">
@@ -1010,18 +1111,18 @@ export default function CorridorTelemetryLedger({
           </div>
 
           {/* MOBILE ONLY VIEW: Corridors Stacked Cards */}
-          <div className="md:hidden divide-y divide-slate-100 max-h-[480px] overflow-y-auto">
+          <div className="lg:hidden p-3 space-y-3">
             {corridors.map((c) => {
               const isDisrupted = c.status === 'DISRUPTED';
               const isCaution = c.status === 'CAUTION';
               const corridorWeather = weather.find((w) => w.corridorId === c.id);
 
               return (
-                <div key={c.id} className="p-3.5 hover:bg-slate-50 transition-colors">
-                  <div className="flex items-start justify-between gap-2 mb-1.5">
+                <div key={c.id} className="bg-white rounded-2xl border border-slate-200 p-4 shadow-card flex flex-col gap-2.5">
+                  <div className="flex items-start justify-between gap-2">
                     <div>
                       <span className="font-mono text-[11px] text-slate-400 font-bold">{c.id}</span>
-                      <div className="font-bold text-sm text-slate-900">{c.name}</div>
+                      <h4 className="font-bold text-sm text-slate-900 leading-snug">{c.name}</h4>
                     </div>
                     <span
                       className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase border shrink-0 ${
@@ -1037,20 +1138,24 @@ export default function CorridorTelemetryLedger({
                   </div>
 
                   {c.disruptionReason && (
-                    <div className="p-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs font-medium mb-2">
+                    <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-medium">
                       ⚠️ {c.disruptionReason}
                     </div>
                   )}
 
-                  <div className="bg-slate-50 p-2 rounded-lg text-[11px] text-slate-600 space-y-1">
+                  <div className="bg-slate-50/90 rounded-xl p-3 border border-slate-100 text-xs space-y-1.5">
                     <div className="flex justify-between">
-                      <span>Route: <strong className="text-slate-800">{c.origin} → {c.destination}</strong></span>
-                      <span className="font-mono">{c.lengthKm} km (~{c.avgTransitHours}h)</span>
+                      <span className="text-slate-500">Route:</span>
+                      <strong className="text-slate-800">{c.origin} → {c.destination}</strong>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span>Weather: {corridorWeather ? `${corridorWeather.rainfallMm}mm rain, ${corridorWeather.condition}` : 'Nominal'}</span>
-                      <span className={`font-mono font-bold ${isDisrupted ? 'text-rose-600' : isCaution ? 'text-amber-600' : 'text-slate-700'}`}>
-                        +{c.delayMinutes}m
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Length & Transit:</span>
+                      <span className="font-mono text-slate-700">{c.lengthKm} km (~{c.avgTransitHours}h)</span>
+                    </div>
+                    <div className="flex justify-between items-center border-t border-slate-200/50 pt-1">
+                      <span className="text-slate-500">Weather:</span>
+                      <span className="font-semibold text-slate-700">
+                        {corridorWeather ? `${corridorWeather.rainfallMm}mm rain, ${corridorWeather.condition}` : 'Nominal'}
                       </span>
                     </div>
                   </div>
@@ -1061,10 +1166,10 @@ export default function CorridorTelemetryLedger({
         </div>
       )}
 
-      {/* Footer */}
-      <div className="border-t border-slate-100 bg-slate-50 px-4 py-2 flex flex-wrap items-center justify-between text-xs text-slate-500 gap-2">
-        <span>Registered fleet: {vehicles.length} assets ({vehicles.filter(v => v.deploymentStatus === 'AVAILABLE' || !v.hasActiveDeployment).length} available)</span>
-        <span>Active deployments: {activeDeployments.length} ongoing journeys</span>
+      {/* Integrated Bottom Summary Footer Strip */}
+      <div className="border-t border-slate-100 bg-slate-50 p-3.5 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-1.5">
+        <span>Registered fleet: <strong className="text-slate-700">{vehicles.length} assets</strong> ({vehicles.filter(v => v.deploymentStatus === 'AVAILABLE' || !v.hasActiveDeployment).length} available)</span>
+        <span>Active deployments: <strong className="text-slate-700">{activeDeployments.length} ongoing journeys</strong></span>
       </div>
     </div>
   );
