@@ -89,6 +89,15 @@
   font-family: 'JetBrains Mono', monospace;
 }
 
+/* Horizontal Scroll Rails without scrollbar */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 /* Custom Sleek Scrollbar */
 ::-webkit-scrollbar {
   width: 5px;
