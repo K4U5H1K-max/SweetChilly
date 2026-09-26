@@ -248,9 +248,9 @@ export default function ProjectBrahmaputraLanding({ onProceed }) {
               onClick={handleProceed}
               disabled={isExiting}
               autoFocus
-              aria-label="Proceed to NER Logistics Command Center"
+              aria-label="Choose your Project Brahmaputra access portal"
             >
-              <span>Proceed</span>
+              <span>Choose Portal</span>
               <span className="pb-arrow-icon" aria-hidden="true">
                 <svg className="w-4 h-4 inline-block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" />

@@ -13,7 +13,7 @@ export default function UserLayout({ children }) {
 
   const handleLogout = async () => {
     await logout();
-    navigate('/login', { replace: true });
+    navigate('/', { replace: true });
   };
 
   useEffect(() => {

@@ -56,7 +56,7 @@ export default function RegisterPage() {
       if (user) {
         navigate('/user/dashboard', { replace: true });
       } else {
-        navigate('/login', {
+        navigate('/login?role=user', {
           state: { message: 'Account created successfully. Please sign in with your credentials.' },
         });
       }
@@ -288,10 +288,10 @@ export default function RegisterPage() {
             <p className="text-xs sm:text-[13px] text-[#556987]">
               Already registered?{' '}
               <Link
-                to="/login"
+                to="/login?role=user"
                 className="font-bold text-[#1D4ED8] hover:text-[#1E40AF] transition-colors underline-offset-2 hover:underline"
               >
-                Sign In to Command
+                Sign In to User Portal
               </Link>
             </p>
           </div>

@@ -703,7 +703,7 @@ export default function UserDashboard() {
               <button
                 onClick={async () => {
                   await logout();
-                  window.location.href = '/login';
+                  window.location.href = '/';
                 }}
                 className="w-full py-3 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer touch-target flex items-center justify-center gap-2"
               >

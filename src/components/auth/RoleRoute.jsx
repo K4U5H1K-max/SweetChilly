@@ -11,7 +11,7 @@ export default function RoleRoute({ allowedRoles = [], children }) {
   }
 
   if (!isAuthenticated || !currentUser) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/access" replace />;
   }
 
   if (!allowedRoles.includes(currentUser.role)) {
@@ -22,7 +22,7 @@ export default function RoleRoute({ allowedRoles = [], children }) {
     if (currentUser.role === 'USER') {
       return <Navigate to="/user/dashboard" replace />;
     }
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/access" replace />;
   }
 
   return children;

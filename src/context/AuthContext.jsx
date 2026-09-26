@@ -47,12 +47,17 @@ export function AuthProvider({ children }) {
   /**
    * User or Admin Login
    */
-  const login = useCallback(async (email, password) => {
+  const login = useCallback(async (email, password, expectedRole = null) => {
     setAuthLoading(true);
     setAuthError(null);
     try {
       const res = await api.login({ email, password });
       if (res && res.success && res.user) {
+        const actualRole = String(res.user.role || '').toUpperCase();
+        if (expectedRole && actualRole !== String(expectedRole).toUpperCase()) {
+          clearAuthToken();
+          throw new Error(`These credentials belong to the ${actualRole === 'ADMIN' ? 'Administration & Operations' : 'User & Fleet Operator'} portal. Please choose that portal and sign in there.`);
+        }
         setCurrentUser(res.user);
         setAuthLoading(false);
         return res.user;

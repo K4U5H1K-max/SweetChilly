@@ -8,6 +8,9 @@ export default function LoginPage() {
   const { login, isAuthenticated, isAdmin, isUser, authLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const selectedRole = new URLSearchParams(location.search).get('role');
+  const expectedRole = selectedRole === 'admin' ? 'ADMIN' : selectedRole === 'user' ? 'USER' : null;
+  const portalTitle = expectedRole === 'ADMIN' ? 'Administration & Operations' : expectedRole === 'USER' ? 'User & Fleet Operator' : 'Command';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -22,6 +25,8 @@ export default function LoginPage() {
     if (isUser) return <Navigate to="/user/dashboard" replace />;
   }
 
+  if (!expectedRole) return <Navigate to="/access" replace />;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMessage('');
@@ -34,7 +39,7 @@ export default function LoginPage() {
 
     setIsSubmitting(true);
     try {
-      const user = await login(trimmedEmail, password);
+      const user = await login(trimmedEmail, password, expectedRole);
       if (user?.role === 'ADMIN') {
         navigate('/admin/dashboard', { replace: true });
       } else {
@@ -90,7 +95,7 @@ export default function LoginPage() {
           {/* Card Header & Subtitle */}
           <div className="text-center mb-6 sm:mb-7">
             <h2 className="text-2xl sm:text-[28px] font-extrabold text-[#0A1629] tracking-tight leading-tight">
-              Sign In to Command
+              Sign In to {portalTitle}
             </h2>
             <p className="text-xs sm:text-[13px] text-[#556987] font-medium mt-1.5 max-w-[300px] mx-auto leading-relaxed">
               Logistics intelligence & emergency accessibility platform
@@ -207,17 +212,20 @@ export default function LoginPage() {
           {/* Thin Divider */}
           <div className="my-6 border-t border-[#E5EFF8]"></div>
 
-          {/* Operator Registration Navigation Link */}
+          {/* Portal navigation and operator registration */}
           <div className="text-center">
-            <p className="text-xs sm:text-[13px] text-[#556987]">
-              Fleet operator without credentials?{' '}
-              <Link
-                to="/register"
-                className="font-bold text-[#1D4ED8] hover:text-[#1E40AF] transition-colors underline-offset-2 hover:underline"
-              >
-                Create Operator Account
-              </Link>
-            </p>
+            {expectedRole !== 'ADMIN' && (
+              <p className="text-xs sm:text-[13px] text-[#556987]">
+                Fleet operator without credentials?{' '}
+                <Link to="/register" className="font-bold text-[#1D4ED8] hover:text-[#1E40AF] transition-colors underline-offset-2 hover:underline">
+                  Create Operator Account
+                </Link>
+              </p>
+            )}
+            <Link to="/access" className="mt-3 inline-block text-xs font-semibold text-[#1D4ED8] hover:underline">
+              Choose a different portal
+            </Link>
+            {expectedRole === 'ADMIN' && <p className="mt-3 text-xs text-[#71829B]">Administrator accounts are provisioned by the platform.</p>}
           </div>
         </main>
       </div>
